@@ -1,0 +1,256 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Apple-style design tokens. Light is the default; `.dark` on <html> switches the palette. */
+:root {
+  color-scheme: light;
+  --c-canvas: 245 245 247;
+  --c-surface: 255 255 255;
+  --c-slate-50: 250 250 252;
+  --c-slate-100: 242 242 245;
+  --c-slate-200: 229 229 234;
+  --c-slate-300: 210 210 215;
+  --c-slate-400: 174 174 178;
+  --c-slate-500: 134 134 139;
+  --c-slate-600: 110 110 115;
+  --c-slate-700: 72 72 74;
+  --c-slate-800: 44 44 46;
+  --c-slate-900: 29 29 31;
+  --c-slate-950: 17 17 19;
+  --c-primary-50: 238 246 255;
+  --c-primary-100: 220 236 255;
+  --c-primary-200: 182 216 255;
+  --c-primary-300: 132 189 255;
+  --c-primary-400: 74 155 255;
+  --c-primary-500: 10 132 255;
+  --c-primary-600: 0 113 227;
+  --c-primary-700: 0 102 204;
+  --c-primary-800: 0 81 158;
+  --c-primary-900: 0 61 120;
+  --c-primary-950: 0 42 82;
+  --c-success-50: 235 249 239;
+  --c-success-100: 212 243 220;
+  --c-success-200: 168 230 184;
+  --c-success-300: 111 212 138;
+  --c-success-400: 69 200 106;
+  --c-success-500: 52 199 89;
+  --c-success-600: 40 167 69;
+  --c-success-700: 36 138 61;
+  --c-success-800: 29 111 49;
+  --c-success-900: 22 84 38;
+  --c-success-950: 14 56 24;
+  --c-danger-50: 255 240 239;
+  --c-danger-100: 255 224 222;
+  --c-danger-200: 255 193 189;
+  --c-danger-300: 255 154 147;
+  --c-danger-400: 255 106 96;
+  --c-danger-500: 255 59 48;
+  --c-danger-600: 227 38 27;
+  --c-danger-700: 215 0 21;
+  --c-danger-800: 168 0 15;
+  --c-danger-900: 125 0 11;
+  --c-danger-950: 82 0 7;
+  --c-warning-50: 255 246 232;
+  --c-warning-100: 255 236 208;
+  --c-warning-200: 255 216 161;
+  --c-warning-300: 255 191 102;
+  --c-warning-400: 255 170 51;
+  --c-warning-500: 255 149 0;
+  --c-warning-600: 224 130 0;
+  --c-warning-700: 178 80 0;
+  --c-warning-800: 138 61 0;
+  --c-warning-900: 102 45 0;
+  --c-warning-950: 64 28 0;
+}
+
+.dark {
+  color-scheme: dark;
+  --c-canvas: 0 0 0;
+  --c-surface: 28 28 30;
+  --c-slate-50: 35 35 37;
+  --c-slate-100: 44 44 46;
+  --c-slate-200: 56 56 58;
+  --c-slate-300: 72 72 74;
+  --c-slate-400: 99 99 102;
+  --c-slate-500: 142 142 147;
+  --c-slate-600: 174 174 178;
+  --c-slate-700: 199 199 204;
+  --c-slate-800: 229 229 234;
+  --c-slate-900: 245 245 247;
+  --c-slate-950: 255 255 255;
+  --c-primary-50: 12 35 64;
+  --c-primary-100: 16 44 80;
+  --c-primary-200: 22 60 108;
+  --c-primary-300: 31 85 150;
+  --c-primary-400: 47 127 214;
+  --c-primary-500: 10 132 255;
+  --c-primary-600: 10 132 255;
+  --c-primary-700: 77 163 255;
+  --c-primary-800: 128 191 255;
+  --c-primary-900: 179 216 255;
+  --c-primary-950: 217 236 255;
+  --c-success-50: 15 42 23;
+  --c-success-100: 19 54 29;
+  --c-success-200: 26 74 40;
+  --c-success-300: 34 100 58;
+  --c-success-400: 42 138 74;
+  --c-success-500: 48 209 88;
+  --c-success-600: 48 209 88;
+  --c-success-700: 95 220 127;
+  --c-success-800: 141 230 163;
+  --c-success-900: 189 240 201;
+  --c-success-950: 224 248 230;
+  --c-danger-50: 58 18 16;
+  --c-danger-100: 74 23 20;
+  --c-danger-200: 100 32 27;
+  --c-danger-300: 138 42 35;
+  --c-danger-400: 201 52 43;
+  --c-danger-500: 255 69 58;
+  --c-danger-600: 255 69 58;
+  --c-danger-700: 255 105 97;
+  --c-danger-800: 255 152 144;
+  --c-danger-900: 255 197 192;
+  --c-danger-950: 255 226 223;
+  --c-warning-50: 58 38 8;
+  --c-warning-100: 72 48 10;
+  --c-warning-200: 96 64 15;
+  --c-warning-300: 133 88 22;
+  --c-warning-400: 194 127 31;
+  --c-warning-500: 255 159 10;
+  --c-warning-600: 255 159 10;
+  --c-warning-700: 255 179 64;
+  --c-warning-800: 255 201 120;
+  --c-warning-900: 255 224 176;
+  --c-warning-950: 255 240 214;
+}
+
+@layer base {
+  html {
+    @apply text-[14px];
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-canvas text-slate-900;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    letter-spacing: -0.01em;
+  }
+  /* macOS pop-up button: up/down chevrons instead of the native arrow. */
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16' fill='none' stroke='%238e8e93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 6l3-3 3 3M2 10l3 3 3-3'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+    background-size: 0.55rem 0.9rem;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  ::selection {
+    @apply bg-primary-500/25;
+  }
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    @apply m-0 appearance-none;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+  /* Thin, unobtrusive scrollbars (macOS-like). */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--c-slate-300)) transparent;
+  }
+}
+
+@layer components {
+  /* Liquid Glass (iOS 26 / macOS Tahoe): translucent material, specular top edge, soft float shadow. */
+  .glass {
+    background-color: rgb(255 255 255 / 0.62);
+    -webkit-backdrop-filter: blur(24px) saturate(1.9);
+    backdrop-filter: blur(24px) saturate(1.9);
+    box-shadow:
+      inset 0 0.5px 0 rgb(255 255 255 / 0.9),
+      inset 0 0 0 0.5px rgb(255 255 255 / 0.45),
+      0 0 0 0.5px rgb(0 0 0 / 0.07),
+      0 8px 28px rgb(0 0 0 / 0.12);
+  }
+  .dark .glass {
+    background-color: rgb(38 38 40 / 0.6);
+    box-shadow:
+      inset 0 0.5px 0 rgb(255 255 255 / 0.16),
+      inset 0 0 0 0.5px rgb(255 255 255 / 0.08),
+      0 0 0 0.5px rgb(0 0 0 / 0.5),
+      0 8px 28px rgb(0 0 0 / 0.45);
+  }
+  /* Accounting tables: hairline rows, quiet headers. */
+  .tbl {
+    @apply w-full border-collapse text-[13.5px];
+  }
+  .tbl thead th {
+    @apply whitespace-nowrap border-b border-slate-200/80 px-3 py-3 text-left text-[12px] font-medium text-slate-500;
+  }
+  .tbl tbody td {
+    @apply border-b border-slate-200/60 px-3 py-[9px] align-middle;
+  }
+  .tbl tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .tbl tbody tr {
+    @apply transition-colors;
+  }
+  .tbl tbody tr:hover td {
+    @apply bg-slate-50;
+  }
+  .tbl tbody tr.row-link {
+    @apply cursor-pointer;
+  }
+  .tbl tbody tr.row-link:hover td {
+    @apply bg-primary-50/60;
+  }
+  .tbl tfoot td {
+    @apply border-t border-slate-200/80 bg-slate-50/60 px-3 py-3 font-semibold;
+  }
+  /* Align the outer columns with the card's 20px padding. */
+  .tbl th:first-child,
+  .tbl td:first-child {
+    @apply pl-5;
+  }
+  .tbl th:last-child,
+  .tbl td:last-child {
+    @apply pr-5;
+  }
+  .tbl .num,
+  .tbl th.num {
+    @apply whitespace-nowrap text-right tabular-nums;
+  }
+  .tbl-sub td {
+    @apply bg-slate-50/70;
+  }
+  /* Phones and tablets: keep columns at their natural width and let the card scroll sideways
+     (TableWrap) instead of squeezing product names into many lines. */
+  @media (max-width: 1023px) {
+    .tbl {
+      min-width: max-content;
+    }
+  }
+}
+
+/* Recharts tooltip follows the theme. */
+.recharts-default-tooltip {
+  background-color: rgb(var(--c-surface)) !important;
+  border: 1px solid rgb(var(--c-slate-200)) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  color: rgb(var(--c-slate-900));
+}
+.recharts-legend-item-text {
+  color: rgb(var(--c-slate-600)) !important;
+}

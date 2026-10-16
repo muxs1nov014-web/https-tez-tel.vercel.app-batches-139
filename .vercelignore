@@ -1,0 +1,9 @@
+# Never upload local secrets or build junk with a CLI deploy (git deploys never see them anyway).
+.env
+.env.*
+**/.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+frontend/dist

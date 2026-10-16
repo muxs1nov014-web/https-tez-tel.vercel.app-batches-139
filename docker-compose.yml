@@ -1,0 +1,67 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-telefon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-telefon}
+      POSTGRES_DB: ${POSTGRES_DB:-telefon}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${DB_PORT:-23432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-telefon}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  bot:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    command: ["python", "-m", "app.bot.main"]
+    depends_on:
+      api:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-:80}
+    ports:
+      - "${WEB_HTTP_PORT:-80}:80"
+      - "${WEB_HTTPS_PORT:-443}:443"
+    volumes:
+      - caddy_data:/data
+    depends_on:
+      - api
+
+  # Temporary public link (Cloudflare quick tunnel, random *.trycloudflare.com URL).
+  # Opt-in only: docker compose --profile tunnel up -d tunnel
+  tunnel:
+    build:
+      context: .
+      dockerfile: deploy/tunnel.Dockerfile
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    # cloudflared --metrics 0.0.0.0:20241 exposes /quicktunnel ({"hostname": ...}) inside the compose network, so the
+    # bot can read the current random hostname for its "📱 Panel" Mini App button (TUNNEL_METRICS_URL).
+    # deploy/tunnel-watchdog.sh exits when the tunnel stays unready, so Docker restarts it with a new tunnel.
+    depends_on:
+      - web
+
+volumes:
+  pgdata:
+  caddy_data:
