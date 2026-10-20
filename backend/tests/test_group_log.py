@@ -117,3 +117,46 @@ async def test_silence_guard_blocks_writes_to_groups(bot):
     await bot.send_message(ALI.id, "salom")
     await bot.get_chat(GROUP.id)
     assert [type(c) for c in bot.session.calls] == [SendMessage, GetChat]
+
+
+async def test_a_nasiya_workbook_sent_to_the_bot_is_counted_and_summarised(session, bot, monkeypatch):
+    """The group's daily file comes from another bot, which this bot cannot see: an operator forwards it (§18.2)."""
+    import io
+
+    from app.bot import nasiya_upload
+    from app.models import Customer, NasiyaReport
+    from app.models import User as PanelUser
+    from tests.test_nasiya_api import DAY1, workbook
+
+    @asynccontextmanager
+    async def fake_session():
+        yield session
+
+    monkeypatch.setattr(nasiya_upload, "SessionLocal", fake_session)
+    content = workbook("14,10,2026", DAY1)
+
+    async def download(file, destination=None):
+        return io.BytesIO(content)
+
+    monkeypatch.setattr(bot, "download", download)
+    private = Chat(id=ALI.id, type="private")
+    doc = Document(file_id="DOC1", file_unique_id="U1", file_name="nazorat_14.10.2026.xlsx", file_size=len(content))
+
+    await bot_main.dp.feed_update(bot, _update(1, chat=private, document=doc))
+    [call] = bot.session.calls
+    assert isinstance(call, SendMessage) and "faqat panel operatori" in call.text and "5005" in call.text
+
+    session.add_all([PanelUser(username="op", password_hash="x", role="operator", telegram_id=ALI.id),
+                     Customer(name="Ali aka", kind="dealer"), Customer(name="Vali aka", kind="dealer")])
+    await session.flush()
+    bot.session.calls.clear()
+    await bot_main.dp.feed_update(bot, _update(2, chat=private, message_id=11, document=doc))
+    [call] = bot.session.calls
+    assert isinstance(call, SendMessage) and call.chat_id == ALI.id
+    assert "14.10.2026" in call.text and "• Nasiya: 3 dona, 3 460 $" in call.text and "✅ Hisoblandi." in call.text
+    report = (await session.execute(select(NasiyaReport))).scalar_one()
+    assert (report.status, report.review_note) == ("confirmed", "Avtomatik: xatosiz")
+
+    bot.session.calls.clear()
+    await bot_main.dp.feed_update(bot, _update(3, chat=private, message_id=12, document=doc))
+    assert "avval yuklangan" in bot.session.calls[0].text and "Bu kun hisobga olingan" in bot.session.calls[0].text

@@ -9,7 +9,7 @@ from aiogram.enums import ChatAction, ChatType
 from aiogram.filters import CommandStart
 from aiogram.types import Message, ReplyKeyboardMarkup
 
-from app.bot import customers_menu, group_log, panel_link
+from app.bot import customers_menu, group_log, nasiya_upload, panel_link
 from app.bot.assistant import Assistant
 from app.bot.webapp import current_webapp_url
 from app.core.config import get_settings
@@ -107,7 +107,7 @@ async def text(message: Message) -> None:
     await _ask(message, text=message.text[:2000])
 
 
-private.include_routers(customers_menu.router, ai)
+private.include_routers(customers_menu.router, nasiya_upload.router, ai)
 dp.include_routers(group_log.router, private)
 
 

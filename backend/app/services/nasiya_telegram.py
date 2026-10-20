@@ -163,7 +163,8 @@ async def bot_status(session: AsyncSession, bot) -> NasiyaBotStatus:
             problems.append(f"«{name}»: bot faqat buyruqlarni ko'radi (privacy yoqilgan, bot admin emas) — "
                             "fayllar kelmaydi. Botni shu guruhda administrator qiling.")
         elif g.excel_files == 0:
-            problems.append(f"«{name}»: bot ulangandan beri guruhga Excel fayl tashlanmagan.")
+            problems.append(f"«{name}»: bot bu guruhdan birorta Excel fayl olmagan. Fayllarni boshqa bot tashlasa, "
+                            "Telegram ularni bu botga ko'rsatmaydi — faylni botga forward qiling.")
     return NasiyaBotStatus(
         bot_username=me.username or "", can_read_all_group_messages=bool(me.can_read_all_group_messages),
         webhook_set=bool(webhook.url), webhook_error=webhook.last_error_message,

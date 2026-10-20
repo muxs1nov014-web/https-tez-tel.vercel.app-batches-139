@@ -393,7 +393,7 @@ async def test_bot_status_explains_why_group_files_do_not_arrive(session, monkey
     assert len(status.problems) == 1 and "administrator qiling" in status.problems[0]
 
     status = await nasiya_telegram.bot_status(session, _FakeBot(privacy_off=False, member_status="administrator"))
-    assert status.problems == ["«Telefon nasiya nazirat»: bot ulangandan beri guruhga Excel fayl tashlanmagan."]
+    assert len(status.problems) == 1 and "faylni botga forward qiling" in status.problems[0]
 
     await _group_message(session, 1, "nazorat_15.10.2026.xlsx")
     status = await nasiya_telegram.bot_status(session, _FakeBot(privacy_off=False, member_status="member"))

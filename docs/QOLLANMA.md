@@ -81,6 +81,12 @@ Har kuni soat 10:00 da tizim o'zi tekshiradi: bot o'tkazib yuborgan yoki «Excel
 hisoblanadi. Faqat varaq nomi hech bir mijozga mos kelmasa, fayl **Nasiya nazorati → Hisobotlar** bo'limida kutadi —
 varaqni mijozga bir marta bog'lang.
 
+**Eng oson yo'l — faylni botga forward qilish.** Guruhga kunlik faylni BonviAI_bot tashlaydi, Telegram esa bir
+botning xabarini boshqa botga ko'rsatmaydi. Shuning uchun guruhdagi faylni **@Teztel2025bot** ga forward qiling (yoki
+botga to'g'ridan-to'g'ri yuboring): bot o'sha zahoti hisoblaydi va javobda kunni, nasiya / qoldiq / sotuvni va xatolarni
+(Excel katagi bilan) yozadi. Buning uchun panelda «Foydalanuvchilar» bo'limida o'zingizga Telegram ID yozilgan
+bo'lishi va rolingiz operator yoki administrator bo'lishi kerak (ID ni bot o'zi aytadi).
+
 **Telegramdan yangilash** — guruhdagi yangi fayllarni hozir o'qiydi. Fayl topilmasa, sababini ko'rsatadi (masalan,
 bot guruhda admin emas — unda bot fayllarni ko'rmaydi: botni guruhda **administrator** qiling). Telegram botga eski
 xabarlarni bermaydi: bot ko'rmagan kunlarning fayllarini Telegram'dan saqlab, **Excel yuklash** bilan qo'shing.

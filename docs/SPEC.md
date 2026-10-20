@@ -558,6 +558,11 @@ panel and then monitored day to day.
   (remembered, or a clear name match as below) and no later file for that day is confirmed. A file with errors is
   confirmed too, noted "Avtomatik: N ta xato bilan"; the errors stay on the report and the daily view and the
   Dashboard flag the day. Only a sheet that matches no customer keeps the file waiting in the review queue.
+- Private chat (`app/bot/nasiya_upload.py`): an `.xlsx` sent or forwarded to the bot by a panel operator or admin
+  (`users.telegram_id`) is ingested as an upload (date fallback: the forward's original date), counted by
+  `auto_confirm`, and answered with the day, per-kind totals, the errors with cells and the outcome. Needed because
+  the group's daily file is posted by another bot (BonviAI_bot) and Telegram never delivers a bot's messages to
+  another bot. Others are told to have their Telegram ID set in the panel.
 - Daily catch-up: Vercel Cron (`vercel.json`, 05:00 UTC = 10:00 Tashkent) calls `GET /api/nasiya/cron` with
   `Authorization: Bearer $CRON_SECRET` (no secret = off, 403). It reads group files the webhook missed (one rescan
   call) and confirms every pending day as an admin would ("Kunlik avtomatik hisoblash"), uploads included.

@@ -141,6 +141,11 @@ export function BotStatusView() {
           ))}
         </ul>
       )}
+      <Alert tone="info" title="Eng oson yo'l">
+        Guruhdagi faylni <span className="font-medium">@{s.bot_username}</span> ga forward qiling (yoki shu botga
+        yuboring) — bot darhol hisoblaydi va natijani yozadi. Guruhga fayllarni boshqa bot tashlasa, Telegram ularni
+        bu botga ko'rsatmaydi, shuning uchun forward kerak.
+      </Alert>
       <p className="text-slate-500">
         Muhim: Telegram botga eski xabarlarni bermaydi. Bot ko'rmagan kunlarning fayllarini Telegram'dan saqlab,{' '}
         <span className="font-medium">Excel yuklash</span> bilan qo'shing (bir nechta faylni birdaniga tanlash mumkin).
