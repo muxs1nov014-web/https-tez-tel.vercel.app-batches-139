@@ -358,6 +358,132 @@ class TelegramGroupMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+# ---- daily nasiya control workbook (SPEC §18) ----
+NASIYA_REPORT_STATUSES = ("pending", "confirmed", "rejected", "superseded", "invalid")
+NASIYA_ITEM_KINDS = ("nasiya", "variant", "qoldiq", "sotuv")
+
+
+class NasiyaReport(Base):
+    """One daily workbook from the "Telefon nasiya nazorat" group (or uploaded in the panel).
+
+    pending → confirmed (the day's official snapshot) | rejected. Confirming a newer file of the same date turns the
+    earlier confirmed one into 'superseded'. 'invalid': a group .xlsx that is not a nasiya workbook (kept so a
+    rescan does not download it again).
+    """
+
+    __tablename__ = "nasiya_reports"
+    __table_args__ = (
+        CheckConstraint(f"status IN {NASIYA_REPORT_STATUSES}", name="ck_nasiya_reports_status"),
+        CheckConstraint("source IN ('telegram','upload')", name="ck_nasiya_reports_source"),
+        UniqueConstraint("file_sha256", name="uq_nasiya_reports_file_sha256"),
+        Index("ix_nasiya_reports_date_status", "report_date", "status"),
+        Index("uq_nasiya_reports_confirmed_date", "report_date", unique=True,
+              postgresql_where="status = 'confirmed'"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    report_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    source: Mapped[str] = mapped_column(String(16))
+    file_name: Mapped[str] = mapped_column(String(255), default="")
+    file_sha256: Mapped[str] = mapped_column(String(64))
+    file_size: Mapped[int] = mapped_column(Integer, default=0)
+    telegram_message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("telegram_group_messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    chat_title: Mapped[str] = mapped_column(String(255), default="")
+    sent_by: Mapped[str] = mapped_column(String(255), default="")  # Telegram sender or panel user
+    item_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    warning_count: Mapped[int] = mapped_column(Integer, default=0)
+    issues: Mapped[list] = mapped_column(JSONB, default=list)  # workbook-level: cross-sheet IMEI, unreadable file
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    sheets: Mapped[list["NasiyaSheet"]] = relationship(
+        back_populates="report", cascade="all, delete-orphan", passive_deletes=True, order_by="NasiyaSheet.position")
+
+
+class NasiyaSheet(Base):
+    """One sheet (= one customer) of a report, with the sheet's own totals and the problems found in it."""
+
+    __tablename__ = "nasiya_sheets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    report_id: Mapped[int] = mapped_column(ForeignKey("nasiya_reports.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    name: Mapped[str] = mapped_column(String(128))
+    sheet_key: Mapped[str] = mapped_column(String(128), index=True)
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), nullable=True, index=True)
+    sheet_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    summary: Mapped[dict] = mapped_column(JSONB, default=dict)  # the sheet's panel: nasiya, qoldiq, limit, schedule
+    declared: Mapped[list] = mapped_column(JSONB, default=list)  # footer totals ('Nasiyada 35 ta', sums)
+    issues: Mapped[list] = mapped_column(JSONB, default=list)
+    paid_note_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)  # '4,490 $ utdi'
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    warning_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    report: Mapped[NasiyaReport] = relationship(back_populates="sheets")
+    customer: Mapped[Customer | None] = relationship(lazy="joined")
+    items: Mapped[list["NasiyaItem"]] = relationship(
+        cascade="all, delete-orphan", passive_deletes=True, order_by="NasiyaItem.id")
+
+
+class NasiyaItem(Base):
+    """One phone (or a count-only qoldiq block) in a sheet: what the workbook says about it that day."""
+
+    __tablename__ = "nasiya_items"
+    __table_args__ = (
+        CheckConstraint(f"kind IN {NASIYA_ITEM_KINDS}", name="ck_nasiya_items_kind"),
+        CheckConstraint("qty > 0", name="ck_nasiya_items_qty"),
+        Index("ix_nasiya_items_report_kind", "report_id", "kind"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    report_id: Mapped[int] = mapped_column(ForeignKey("nasiya_reports.id", ondelete="CASCADE"))
+    sheet_id: Mapped[int] = mapped_column(ForeignKey("nasiya_sheets.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    model: Mapped[str] = mapped_column(String(160))
+    imei: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    qty: Mapped[int] = mapped_column(Integer, default=1)
+    price_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    marked_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    term_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cell: Mapped[str] = mapped_column(String(16), default="")
+
+    report: Mapped[NasiyaReport] = relationship()
+
+
+class NasiyaIntake(Base):
+    """What happened to each group document the intake looked at, so a rescan never downloads it twice."""
+
+    __tablename__ = "nasiya_intake"
+    __table_args__ = (
+        CheckConstraint("outcome IN ('created','duplicate','invalid')", name="ck_nasiya_intake_outcome"),
+    )
+
+    telegram_message_id: Mapped[int] = mapped_column(
+        ForeignKey("telegram_group_messages.id", ondelete="CASCADE"), primary_key=True)
+    report_id: Mapped[int | None] = mapped_column(ForeignKey("nasiya_reports.id", ondelete="SET NULL"), nullable=True)
+    outcome: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class NasiyaSheetLink(Base):
+    """Remembered sheet name → panel customer, so the next day's file maps itself."""
+
+    __tablename__ = "nasiya_sheet_links"
+    __table_args__ = (UniqueConstraint("sheet_key", name="uq_nasiya_sheet_links_sheet_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sheet_key: Mapped[str] = mapped_column(String(128))
+    sheet_name: Mapped[str] = mapped_column(String(128))
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class LoginFailure(Base):
     """One failed panel login. /auth/login refuses after too many recent failures (SPEC §16.1)."""
 

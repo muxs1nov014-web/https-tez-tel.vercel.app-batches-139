@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.api.routers import auth, batches, catalog, customer_accounts, reports, stock_sales, telegram
+from app.api.routers import auth, batches, catalog, customer_accounts, nasiya, reports, stock_sales, telegram
 from app.core.config import get_settings
 from app.core.errors import AppError
 
@@ -29,5 +29,5 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
-for module in (auth, catalog, customer_accounts, batches, stock_sales, reports, telegram):
+for module in (auth, catalog, customer_accounts, batches, stock_sales, reports, telegram, nasiya):
     app.include_router(module.router, prefix="/api")

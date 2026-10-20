@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str = ""
     # Groups whose messages the bot stores (SPEC §14), comma-separated chat IDs. Empty = every group it is in.
     telegram_group_ids: str = ""
+    # Daily nasiya workbooks (SPEC §18): groups whose .xlsx files become nasiya reports. Empty = every stored group.
+    nasiya_chat_ids: str = ""
     # Mini App (SPEC §13.3). initData older than this many seconds is refused by POST /auth/telegram.
     telegram_initdata_max_age: int = 86400
     # https URL of the admin panel. Empty = the bot shows no WebApp button and leaves its menu button alone.

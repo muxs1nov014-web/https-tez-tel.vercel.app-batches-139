@@ -73,6 +73,34 @@ Sahifadagi bo'limlar: Qoldiq, Harakatlar, Sotuvlar, To'lovlar, Hisob-kitob (har 
 qarz qoldig'i bilan). **Jami majburiyat** = nasiya + mijoz qo'lidagi molning kelishilgan narxdagi qiymati.
 Harakat va to'lovni faqat administrator o'chira oladi.
 
+### Nasiya nazorati (kunlik Excel)
+«Telefon nasiya nazorat» guruhiga har kuni tashlanadigan Excel faylni bot o'zi oladi va tekshiradi.
+Fayl **Nasiya nazorati → Hisobotlar** bo'limida «Tekshirilmoqda» holatida paydo bo'ladi.
+
+Excel qanday yozilishi kerak (bot shunday o'qiydi):
+- Har bir varaq — bitta mijoz. Tepada sana (`15,10,2026`) va ism.
+- Ustun sarlavhasi: **Nasiya** (qarz), **N Variant**, **Qoldiq** / **Колгани** (mijozdagi bizning mol), **Sotuv** (bugun to'langan).
+- Ustun ichida: model nomi, ostida IMEI lar, oxirida narx va soni: `1900*10` = 1900 $ dan 10 dona.
+  Bitta telefon bo'lsa, faqat narx (`1880`). Qoldiq ustunida oxirida soni (`3`).
+- `15,10,` — shu sanada berilgan bloklar; `8 kunga berildi` — muddat.
+- Pastda: `Nasiyada 35 ta`, `4 ta tel un kirim`, `Ostatka`.
+
+Tekshirish:
+1. Hisobotni oching. Har bir varaqni panel mijoziga bog'lang (bir marta; keyingi kunlarda o'zi bog'lanadi).
+2. **Xato** lar: IMEI noto'g'ri (raqami yoki nazorat raqami xato), `1900*10` deb yozilgan-u IMEI 9 ta,
+   narx yozilmagan, bitta IMEI ikki joyda, sarlavha «Sotuv» lekin pastida «Nasiyada». Har birida Excel katagi
+   ko'rsatiladi (masalan `B14`). Excel'da tuzatib guruhga qayta tashlang — yangi fayl shu kunni almashtiradi.
+3. **Diqqat** lar (masalan «Nasiyada 39 ta» deb yozilgan, hisoblanganda 38 ta) — tekshirib ko'ring, tasdiqlashni to'xtatmaydi.
+4. **Tasdiqlash** ni bosing. Xato bo'lsa, faqat administrator izoh yozib «Xatolar bilan tasdiqlash» mumkin.
+
+**Kunlik nazorat** sahifasi oxirgi tasdiqlangan kunni oldingi kun bilan IMEI bo'yicha solishtiradi:
+yangi nasiya, to'langan (Nasiya → Sotuv), qoldiqdan nasiyaga o'tgan telefonlar. **Ogohlantirishlar** — tekshirish kerak:
+nasiyadan izsiz chiqqan (Sotuv'da ham yo'q), boshqa mijozga o'tgan, narxi o'zgargan, to'langan telefon qayta chiqqan.
+Mijozlar jadvalida: nasiya, varaqdagi o'z hisobi (farq bo'lsa qizil), qoldiq, limit va bo'sh limit, eng eski nasiya (kun).
+Mijoz nomini bossangiz — har bir telefon: model, IMEI, narx, qachondan va necha kundan beri turibdi.
+IMEI ni bossangiz — telefonning kunma-kun tarixi. Guruhga bot o'chiq paytda tashlangan fayllar uchun
+**Guruhdan qayta o'qish** tugmasini bosing; boshqa joydan olingan faylni **Excel yuklash** bilan qo'shing.
+
 ## 4. Telegram bot
 Botga yozing yoki ovozli xabar yuboring. Masalan:
 - "18 Pro Max 256 dan nechta qoldi?"
@@ -115,4 +143,5 @@ Panel telefonda ham to'liq ishlaydi. Brauzerda havolani oching yoki botdagi **�
 | Taxminiy | Xarid paytidagi hisob |
 | Real (amaldagi) | Aslida to'langan summa bo'yicha hisob |
 | Nasiya | Mijozning qarzi: boshlang'ich qarz + sotuvlar − to'lovlar |
+| Nasiya nazorati | Guruhdagi kunlik Excel bo'yicha IMEI darajasidagi nazorat (mijozlar hisobidan alohida) |
 | Qo'lidagi mol | Mijozga berilgan, hali sotilmagan telefonlar (bizniki) |

@@ -15,10 +15,12 @@ from aiogram import F, Router
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware
 from aiogram.enums import ChatType
 from aiogram.types import Message
+from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal
-from app.services import group_messages, telegram_notify
+from app.models import TelegramGroupMessage
+from app.services import group_messages, nasiya_telegram, telegram_notify
 
 log = logging.getLogger(__name__)
 GROUP_TYPES = {ChatType.GROUP, ChatType.SUPERGROUP}
@@ -94,6 +96,26 @@ async def capture(message: Message) -> None:
         await group_messages.save(session, **_fields(message))
         await telegram_notify.mark_reachable(session, message.chat.id)  # the bot is in this group again (SPEC §17)
         await session.commit()
+    if message.document and nasiya_telegram.is_candidate(message.chat.id, message.document.file_name,
+                                                         message.document.file_size):
+        await _ingest_nasiya(message)
+
+
+async def _ingest_nasiya(message: Message) -> None:
+    """A daily nasiya workbook (SPEC §18): download it and queue it for review. Reading only: nothing is posted.
+    A failure is logged; the stored message lets an operator retry with "Guruhdan qayta o'qish" in the panel."""
+    async def download(file_id: str) -> bytes:
+        return (await message.bot.download(file_id)).getvalue()
+
+    try:
+        async with SessionLocal() as session:
+            row = (await session.execute(select(TelegramGroupMessage).where(
+                TelegramGroupMessage.chat_id == message.chat.id,
+                TelegramGroupMessage.message_id == message.message_id))).scalar_one()
+            await nasiya_telegram.ingest_message(session, row, download)
+            await session.commit()
+    except Exception:
+        log.exception("nasiya workbook from group %s message %s was not ingested", message.chat.id, message.message_id)
 
 
 router.message.register(capture)

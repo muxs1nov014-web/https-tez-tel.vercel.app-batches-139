@@ -18,6 +18,7 @@ import { EmptyState, QueryView } from '../../components/ui/States';
 import { ArchiveIcon, BanknotesIcon, CartIcon, ChartIcon, CubeIcon, ReceiptIcon, TrendUpIcon } from '../../components/ui/icons';
 import { StatCard } from '../../components/ui/StatCard';
 import { fmtMonth, fmtQty, fmtUsd, signClass, toNum } from '../../lib/format';
+import { NasiyaDashboardCard } from '../nasiya/NasiyaDashboardCard';
 import {
   BAR_RADIUS,
   ChartPanel,
@@ -261,6 +262,8 @@ export function DashboardPage() {
                   <StatCard icon={ReceiptIcon} tint="purple" label="Shu oy xarid summasi" value={fmtUsd(data.month.purchases_usd, { symbol: true })} />
                 </div>
               </div>
+
+              <NasiyaDashboardCard />
 
               {!hasActivity ? (
                 <Card>

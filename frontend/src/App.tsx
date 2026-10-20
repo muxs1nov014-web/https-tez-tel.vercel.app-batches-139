@@ -26,6 +26,9 @@ const TariffsPage = page(() => import('./pages/tariffs/TariffsPage'), 'TariffsPa
 const ChannelsPage = page(() => import('./pages/channels/ChannelsPage'), 'ChannelsPage');
 const CustomersPage = page(() => import('./pages/customers/CustomersPage'), 'CustomersPage');
 const CustomerDetailPage = page(() => import('./pages/customers/CustomerDetailPage'), 'CustomerDetailPage');
+const NasiyaPage = page(() => import('./pages/nasiya/NasiyaPage'), 'NasiyaPage');
+const NasiyaReportPage = page(() => import('./pages/nasiya/NasiyaReportPage'), 'NasiyaReportPage');
+const NasiyaCustomerPage = page(() => import('./pages/nasiya/NasiyaCustomerPage'), 'NasiyaCustomerPage');
 const ReportsPage = page(() => import('./pages/reports/ReportsPage'), 'ReportsPage');
 const ImportPage = page(() => import('./pages/import/ImportPage'), 'ImportPage');
 const BotUsersPage = page(() => import('./pages/botUsers/BotUsersPage'), 'BotUsersPage');
@@ -65,6 +68,9 @@ export function App() {
           <Route path="channels" element={<ChannelsPage />} />
           <Route path="customers" element={<CustomersPage />} />
           <Route path="customers/:customerId" element={<CustomerDetailPage />} />
+          <Route path="nasiya" element={<NasiyaPage />} />
+          <Route path="nasiya/reports/:reportId" element={<NasiyaReportPage />} />
+          <Route path="nasiya/customers/:customerId" element={<NasiyaCustomerPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route
             path="import"

@@ -512,3 +512,76 @@ automatically; it goes only from the batch page button, to the people picked the
 - Group guard: the sender opens its own bot session with `GroupSilence(allowed_chat_ids=<picked chats>)`. The webhook
   and polling bot keep the strict guard, so every other group stays silent.
 - No migration: the settings table is key-value. A `batch_notify_enabled` row left by the first version is ignored.
+
+## 18. Daily nasiya control workbook (2026-10-20)
+
+Every day the "Telefon nasiya nazorat" group (`-1003839931967`) receives an Excel workbook (`nazorat_15.10.2026.xlsx`).
+It replaces §14's open item for this group: the file becomes an IMEI-level snapshot of every customer, reviewed in the
+panel and then monitored day to day.
+
+### 18.1 Workbook format (`app/domain/nasiya_sheet.py`, pure)
+- One sheet per customer. Top rows: the date (`15,10,2026`) and the name. A header row (found in the first 6 rows)
+  gives each column's kind: `Nasiya` / `Nasiyada` / `Насияга берилди` → nasiya (debt); `N Variant` → variant
+  (long-term deal, also debt); `Qoldiq` / `Колгани` / `Ostatka` → qoldiq (our goods at the customer, no debt yet);
+  `Sotuv` → sotuv (paid today). A header merged over several columns names each of them; a blank header right of a
+  typed column inherits its kind (warning).
+- A column is a stream of blocks: model name (any text with a digit), IMEIs (14–17 digits), then a terminator:
+  `1900*10` = price 1900 $ × 10 phones (the count must equal the IMEIs above it), a lone price for one phone, or for
+  qoldiq a count. `15,10,` marks the date of the blocks below it (stored as `marked_date`); `8 kunga berildi` sets
+  `term_days`. Text without a digit, with `$`, or with `aka`/`klent` is a note (the customer's name) and is skipped.
+- A column ends at its own footer label: `Nasiyada 35 ta`, `4 ta tel un kirim` / `taga Puli olindi` / `Sotuv 16 taga`,
+  `Ostatka`, `4,490 $ utdi`, `Jami nasiyasa`. The sum below (or beside) a label is checked against the IMEIs of the
+  label's column and the same-kind columns to its right without a label of their own. A paid-total label under a
+  non-sotuv column is only the day's note.
+- The summary panel (a label column with `Limit` / `Berish mumkin`, values to its right) is read into
+  `summary`: variant, nasiya, qoldiq, jami, limit, available, and the variant payment `schedule` (`31.10.2026 | 159500`).
+- Issues. Errors (block confirmation): `count_mismatch`, `price_missing`, `imei_invalid` (length or Luhn check digit),
+  `imei_duplicate` (in a sheet), `imei_cross_sheet` (one phone at two customers), `imei_without_model`,
+  `unknown_column`, `kind_conflict` (header `Sotuv`, footer `Nasiyada 20 ta`: the header decides, a person checks),
+  `data_after_footer`, `no_date`, `unreadable`. Warnings: `declared_qty`, `declared_amount`, `empty_block`,
+  `stray_number`, `price_low`, `price_without_count`, `header_inherited`. Nothing is dropped silently: a phone without
+  a price is kept with `price_usd = null`.
+- Report date: the date most sheets carry (a shop sheet updated weekly does not decide it), else the file name, else
+  the message date.
+- Checked against the 60 workbooks from 27.07–15.10.2026: on 15.10 the IMEI sum of nasiya equals each sheet's own
+  "Nasiya" panel figure to the cent for every customer.
+
+### 18.2 Intake
+- Bot (`group_log.capture`): after storing the message, an `.xlsx` document (≤ 20 MB) from a group in
+  `NASIYA_CHAT_IDS` (empty = every stored group) is downloaded (`GetFile`, a read; nothing is posted) and ingested.
+  A failure is logged and does not affect message capture.
+- `nasiya_intake` (one row per handled group message: created / duplicate / invalid) makes every message handled at
+  most once. `POST /nasiya/reports/rescan` (operator, "Guruhdan qayta o'qish") handles stored messages without a row,
+  40 per call: files sent while the bot was down or before §18.
+- `POST /nasiya/reports/upload` (operator, one file per request) for files from elsewhere. A file that is not a nasiya
+  workbook is refused for an upload and kept as `invalid` for a group message.
+- The same bytes twice (sha256) are one report.
+
+### 18.3 Review (`nasiya_reports`)
+- Tables (migration `0007`): `nasiya_reports` (status pending / confirmed / rejected / superseded / invalid;
+  partial unique index: one confirmed report per date), `nasiya_sheets` (customer link, summary, footer, issues),
+  `nasiya_items` (kind, model, imei, qty, price_usd, marked_date, term_days, cell), `nasiya_sheet_links`
+  (sheet name key → customer, remembered), `nasiya_intake`.
+- Sheet → customer: `PUT /nasiya/reports/{id}/sheets/{sheet_id} {customer_id}` (operator) links every sheet with the
+  same name key (case, spaces and punctuation ignored) and remembers it for the next files. One customer per sheet in a
+  file (409). The panel suggests a customer only on a clear match: ratio ≥ 0.8, 0.1 ahead of the next, equal numbers
+  in the names (B23 is never suggested for B16), not taken by another sheet.
+- `POST /nasiya/reports/{id}/confirm {force, note}` (operator): needs a date, every sheet with phones linked, and no
+  errors; `force` (admin) confirms despite errors and the panel asks for a note. A confirmed report of the same date
+  becomes `superseded`. `POST …/reject {note}` (operator), `DELETE` (admin).
+
+### 18.4 Monitoring (`nasiya_monitor`, confirmed reports only)
+- Events by IMEI against the previous confirmed day: new_debt, qoldiq_to_debt, paid (nasiya → sotuv), sold_paid,
+  sold_direct, handover; alerts: vanished_debt (left the debt without appearing in Sotuv), vanished_qoldiq,
+  debt_to_qoldiq, moved (another customer), price_changed, reopened (sotuv → anything). The panel says how many days
+  lie between the two days compared.
+- Age: the first confirmed day of the phone's current unbroken run at the same customer in the same state (or its
+  `marked_date`, when earlier and not in the future). A run that reaches the first confirmed day is a lower bound
+  (`since_exact = false`, shown as "≥"). Buckets 0–3, 4–7, 8–14, 15–30, 30+ days; overdue = age > `term_days`.
+- Per customer: debt (nasiya + variant), qoldiq (count; value from the sheet's panel), paid today, new debt, limit and
+  available (limit − debt − qoldiq value), over_limit, the sheet's own Nasiya figure (shown red when it differs from
+  the IMEI sum) and the panel ledger debt (§12) for reconciliation. The workbook does not write into the §12 ledger.
+- `GET /nasiya/overview?on=`, `/nasiya/series?days=&customer_id=`, `/nasiya/customers/{id}?on=`, `/nasiya/imei/{imei}`
+  (viewer). Panel: "Nasiya nazorati" (Savdo group) with the daily view and the report list, a review page per report
+  (every phone by model with its IMEIs and cells), a page per customer (every phone with model, IMEI, price, since,
+  age), and a block on the Dashboard.

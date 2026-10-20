@@ -22,6 +22,9 @@ export type Action =
   | 'customerPayments.write' // payments and opening debt
   | 'customerPayments.delete'
   | 'imports.run'
+  | 'nasiya.review' // daily nasiya workbooks: upload, rescan, link sheets, confirm, reject (SPEC §18)
+  | 'nasiya.force' // confirm a workbook that still has errors
+  | 'nasiya.delete'
   | 'users.manage'
   | 'botUsers.manage';
 
@@ -45,6 +48,9 @@ const RULES: Record<Action, Role[]> = {
   'customerPayments.write': OPERATOR,
   'customerPayments.delete': ADMIN,
   'imports.run': OPERATOR,
+  'nasiya.review': OPERATOR,
+  'nasiya.force': ADMIN,
+  'nasiya.delete': ADMIN,
   'users.manage': ADMIN,
   'botUsers.manage': ADMIN,
 };

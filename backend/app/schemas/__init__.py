@@ -739,3 +739,244 @@ class NotifyConfigOut(BaseModel):
     chat_ids: list[str]
     bot_configured: bool
     groups: list[TelegramGroupOut]  # groups the bot has seen, to pick an ID from
+
+
+# ---- daily nasiya control workbook (SPEC §18) ----
+NasiyaStatus = Literal["pending", "confirmed", "rejected", "superseded", "invalid"]
+NasiyaKind = Literal["nasiya", "variant", "qoldiq", "sotuv"]
+NasiyaEventType = Literal["new_debt", "qoldiq_to_debt", "paid", "sold_paid", "sold_direct", "handover",
+                          "vanished_debt", "vanished_qoldiq", "debt_to_qoldiq", "moved", "price_changed", "reopened"]
+
+
+class NasiyaIssueOut(BaseModel):
+    level: Literal["error", "warning"]
+    code: str
+    message: str
+    cell: str = ""
+
+
+class NasiyaDeclaredOut(BaseModel):
+    kind: str
+    label: str
+    qty: int | None
+    amount: Num | None
+    cell: str
+
+
+class NasiyaItemOut(ORM):
+    id: int
+    kind: NasiyaKind
+    model: str
+    imei: str | None
+    qty: int
+    price_usd: Num | None
+    marked_date: date | None
+    term_days: int | None
+    cell: str
+
+
+class NasiyaKindTotal(BaseModel):
+    kind: NasiyaKind
+    qty: int
+    amount: Num  # Σ price × qty; qoldiq has no price in the workbook, so 0
+
+
+class NasiyaSheetOut(BaseModel):
+    id: int
+    position: int
+    name: str
+    customer: CustomerRef | None
+    suggested_customer: CustomerRef | None  # best name match among panel customers, while unlinked
+    sheet_date: date | None
+    summary: dict
+    declared: list[NasiyaDeclaredOut]
+    issues: list[NasiyaIssueOut]
+    paid_note_usd: Num | None
+    error_count: int
+    warning_count: int
+    totals: list[NasiyaKindTotal]
+    items: list[NasiyaItemOut]
+
+
+class NasiyaReportSummary(BaseModel):
+    id: int
+    report_date: date | None
+    status: NasiyaStatus
+    source: Literal["telegram", "upload"]
+    file_name: str
+    chat_title: str
+    sent_by: str
+    item_count: int
+    error_count: int
+    warning_count: int
+    sheet_count: int
+    unlinked_sheets: int
+    created_at: datetime
+    reviewed_at: datetime | None
+    reviewed_by: str | None
+    review_note: str | None
+
+
+class NasiyaEventOut(BaseModel):
+    type: NasiyaEventType
+    alert: bool  # needs a person to look at it
+    customer: CustomerRef | None
+    sheet_name: str
+    other_customer: CustomerRef | None  # 'moved': where it was before
+    model: str
+    imei: str
+    price_usd: Num | None
+    previous_price_usd: Num | None
+
+
+class NasiyaEventCount(BaseModel):
+    type: NasiyaEventType
+    alert: bool
+    qty: int
+    amount: Num
+
+
+class NasiyaDiffOut(BaseModel):
+    previous_report_id: int
+    previous_date: date
+    counts: list[NasiyaEventCount]
+    events: list[NasiyaEventOut]
+
+
+class NasiyaReportDetail(NasiyaReportSummary):
+    issues: list[NasiyaIssueOut]
+    sheets: list[NasiyaSheetOut]
+    diff: NasiyaDiffOut | None  # against the latest confirmed report before this date
+
+
+class NasiyaSheetLinkIn(BaseModel):
+    customer_id: int
+
+
+class NasiyaConfirmIn(BaseModel):
+    force: bool = False  # confirm despite errors (admin only)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class NasiyaRejectIn(BaseModel):
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class NasiyaUploadOut(BaseModel):
+    file_name: str
+    report_id: int | None
+    report_date: date | None
+    duplicate: bool
+    error: str | None
+
+
+class NasiyaRescanOut(BaseModel):
+    checked: int
+    created: int
+    skipped: int
+    failed: int
+
+
+class NasiyaAgingBucket(BaseModel):
+    label: str
+    min_days: int
+    max_days: int | None
+    qty: int
+    amount: Num
+
+
+class NasiyaTotals(BaseModel):
+    debt_usd: Num  # nasiya + variant
+    debt_qty: int
+    nasiya_usd: Num
+    variant_usd: Num
+    qoldiq_qty: int
+    qoldiq_value_usd: Num  # from the sheets' own panel (cost value), when present
+    sotuv_usd: Num
+    sotuv_qty: int
+    overdue_qty: int
+    overdue_usd: Num
+
+
+class NasiyaCustomerRow(BaseModel):
+    customer: CustomerRef
+    sheet_name: str
+    totals: NasiyaTotals
+    limit_usd: Num | None
+    exposure_usd: Num  # debt + qoldiq value: what the sheet's 'Jami' means
+    available_usd: Num | None  # limit − exposure
+    over_limit: bool
+    max_age_days: int | None
+    aging: list[NasiyaAgingBucket]
+    new_debt_usd: Num
+    paid_usd: Num
+    alert_count: int
+    file_nasiya_usd: Num | None  # the sheet's own 'Nasiya' panel figure, to cross-check the IMEI sum
+    panel_debt_usd: Num | None  # debt in the panel's customer ledger (SPEC §12), for reconciliation
+    error_count: int
+
+
+class NasiyaOverviewOut(BaseModel):
+    report: NasiyaReportSummary | None
+    previous_date: date | None
+    totals: NasiyaTotals | None
+    previous_totals: NasiyaTotals | None
+    aging: list[NasiyaAgingBucket]
+    customers: list[NasiyaCustomerRow]
+    counts: list[NasiyaEventCount]
+    alerts: list[NasiyaEventOut]
+    pending_reports: int
+    history_start: date | None  # first confirmed day: ages before it are lower bounds
+
+
+class NasiyaSeriesPoint(BaseModel):
+    date: date
+    report_id: int
+    debt_usd: Num
+    debt_qty: int
+    qoldiq_qty: int
+    sotuv_usd: Num
+    sotuv_qty: int
+
+
+class NasiyaDebtItemOut(BaseModel):
+    kind: NasiyaKind
+    model: str
+    imei: str | None
+    qty: int
+    price_usd: Num | None
+    since: date | None  # first day of the current run in this state (or the marked date, if earlier)
+    since_exact: bool  # False: already there on the first confirmed day, so the real date may be earlier
+    age_days: int | None
+    term_days: int | None
+    overdue: bool
+    marked_date: date | None
+
+
+class NasiyaModelRow(BaseModel):
+    kind: NasiyaKind
+    model: str
+    qty: int
+    amount: Num
+
+
+class NasiyaCustomerDetail(BaseModel):
+    customer: CustomerRef
+    report: NasiyaReportSummary | None
+    row: NasiyaCustomerRow | None
+    items: list[NasiyaDebtItemOut]  # every phone at the customer that day: nasiya, variant, qoldiq, sotuv
+    models: list[NasiyaModelRow]
+    events: list[NasiyaEventOut]  # against the previous confirmed day
+    series: list[NasiyaSeriesPoint]
+    schedule: list[dict]  # variant payment dates from the sheet's panel
+
+
+class NasiyaImeiTrailRow(BaseModel):
+    date: date
+    report_id: int
+    customer: CustomerRef | None
+    sheet_name: str
+    kind: NasiyaKind
+    model: str
+    price_usd: Num | None
+    cell: str

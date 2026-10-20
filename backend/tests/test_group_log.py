@@ -66,7 +66,8 @@ async def test_group_messages_are_stored_and_never_answered(session, bot):
     await bot_main.dp.feed_update(bot, _update(3, message_id=12, caption="hisobot", document=Document(
         file_id="DOC1", file_unique_id="U1", file_name="qoldiq.xlsx")))
 
-    assert bot.session.calls == []
+    # Nothing is sent; the .xlsx document is only read (GetFile) by the nasiya intake (SPEC §18).
+    assert [type(c).__name__ for c in bot.session.calls] == ["GetFile"]
     rows = await _rows(session)
     assert [(r.message_id, r.content_type, r.text) for r in rows] == [
         (10, "text", "/start"), (11, "text", "Xusan aka 5 ta 17 pro max oldi"), (12, "document", "hisobot")]

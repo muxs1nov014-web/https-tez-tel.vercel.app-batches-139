@@ -5,6 +5,7 @@ import {
   ArchiveIcon,
   CartIcon,
   ChartIcon,
+  ClipboardCheckIcon,
   ChatIcon,
   CubeIcon,
   EllipsisCircleIcon,
@@ -67,6 +68,7 @@ export const NAV: NavGroup[] = [
       { to: '/stock', label: 'Ombor', icon: CubeIcon, tint: 'brown' },
       { to: '/sales', label: 'Sotuvlar', icon: CartIcon, tint: 'pink' },
       { to: '/customers', label: 'Mijozlar', icon: UsersIcon, tint: 'indigo' },
+      { to: '/nasiya', label: 'Nasiya nazorati', icon: ClipboardCheckIcon, tint: 'red' },
     ],
   },
   {
