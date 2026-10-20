@@ -16,7 +16,10 @@ from app.schemas import (
     NasiyaConfirmIn,
     NasiyaCustomerDetail,
     NasiyaImeiTrailRow,
+    NasiyaMonthRow,
     NasiyaOverviewOut,
+    NasiyaProcessIn,
+    NasiyaProcessOut,
     NasiyaRejectIn,
     NasiyaReportDetail,
     NasiyaReportSummary,
@@ -41,6 +44,12 @@ async def overview(on: date | None = None, session: AsyncSession = Depends(get_s
 async def series(days: int = Query(90, ge=1, le=730), customer_id: int | None = None,
                  session: AsyncSession = Depends(get_session)):
     return await nasiya_monitor.series(session, days, customer_id)
+
+
+@router.get("/months", response_model=list[NasiyaMonthRow], dependencies=[Depends(viewer)])
+async def months(count: int = Query(12, ge=1, le=36), customer_id: int | None = None,
+                 session: AsyncSession = Depends(get_session)):
+    return await nasiya_monitor.months(session, count, customer_id)
 
 
 @router.get("/customers/{customer_id}", response_model=NasiyaCustomerDetail, dependencies=[Depends(viewer)])
@@ -83,7 +92,7 @@ async def upload(file: UploadFile = File(...), user: User = Depends(operator),
 
 
 @router.post("/reports/rescan", response_model=NasiyaRescanOut, dependencies=[Depends(operator)])
-async def rescan(session: AsyncSession = Depends(get_session)):
+async def rescan(since: date | None = None, session: AsyncSession = Depends(get_session)):
     if not get_settings().telegram_bot_token:
         raise ValidationFailed("Bot sozlanmagan (TELEGRAM_BOT_TOKEN yo'q)")
     from app.bot import webhook  # aiogram loads only when needed
@@ -93,9 +102,18 @@ async def rescan(session: AsyncSession = Depends(get_session)):
         async def download(file_id: str) -> bytes:
             return (await bot.download(file_id)).getvalue()
 
-        result = await nasiya_telegram.rescan(session, download)
+        result = await nasiya_telegram.rescan(session, download, since=since)
     finally:
         await bot.session.close()
+    await session.commit()
+    return result
+
+
+@router.post("/reports/process", response_model=NasiyaProcessOut)
+async def process(data: NasiyaProcessIn, user: User = Depends(operator), session: AsyncSession = Depends(get_session)):
+    """Confirm every pending day from `since` on; files with errors only when an administrator runs it."""
+    result = await nasiya_reports.process_pending(session, user.id, since=data.since,
+                                                  allow_errors=ROLE_RANK[user.role] >= ROLE_RANK["admin"])
     await session.commit()
     return result
 

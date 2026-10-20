@@ -26,6 +26,7 @@ from app.schemas import (
     NasiyaEventOut,
     NasiyaImeiTrailRow,
     NasiyaModelRow,
+    NasiyaMonthRow,
     NasiyaOverviewOut,
     NasiyaSeriesPoint,
     NasiyaTotals,
@@ -451,3 +452,74 @@ async def imei_trail(session: AsyncSession, imei: str) -> list[NasiyaImeiTrailRo
                                kind=kind, model=model, price_usd=price, cell=cell)
             for d, rid, cid, name, kind, model, price, cell in rows]
 
+
+
+def _month_start(d: date) -> date:
+    return d.replace(day=1)
+
+
+async def months(session: AsyncSession, count: int = 12, customer_id: int | None = None) -> list[NasiyaMonthRow]:
+    """Month by month from the confirmed days (newest month first).
+
+    Sotuv: phones in the Sotuv column, each IMEI once on its first day there (it can stay listed a few days).
+    New debt: phones that are debt (nasiya / variant) on a day and were not the day before; the first confirmed day
+    has no day before, so its month is marked partial. Month end: debt and qoldiq on the month's last confirmed
+    day. For one customer, a phone moved in from another customer counts as new debt for this one."""
+    latest = await latest_confirmed(session)
+    if latest is None:
+        return []
+    first_month = _month_start(latest.report_date)
+    for _ in range(count - 1):
+        first_month = _month_start(first_month - timedelta(days=1))
+    baseline = await previous_confirmed(session, first_month)
+    reports = list((await session.execute(
+        select(NasiyaReport.id, NasiyaReport.report_date)
+        .where(NasiyaReport.status == "confirmed",
+               NasiyaReport.report_date >= (baseline.report_date if baseline else first_month))
+        .order_by(NasiyaReport.report_date))).all())
+    stmt = (select(NasiyaItem.report_id, NasiyaSheet.customer_id, NasiyaItem.kind, NasiyaItem.imei, NasiyaItem.qty,
+                   NasiyaItem.price_usd)
+            .join(NasiyaSheet, NasiyaSheet.id == NasiyaItem.sheet_id)
+            .where(NasiyaItem.report_id.in_([rid for rid, _ in reports])))
+    if customer_id is not None:
+        stmt = stmt.where(NasiyaSheet.customer_id == customer_id)
+    by_report: dict[int, list] = defaultdict(list)
+    for rid, cid, kind, imei, qty, price in (await session.execute(stmt)).all():
+        by_report[rid].append((cid, kind, imei, qty, price or ZERO))
+
+    out: dict[date, dict] = {}
+    prev: dict[str, tuple] | None = None  # imei → (customer, group) on the previous confirmed day
+    for rid, day in reports:
+        rows = by_report.get(rid, [])
+        state = {imei: (cid, group_of(kind)) for cid, kind, imei, _, _ in rows if imei}
+        if day >= first_month:
+            m = out.setdefault(_month_start(day), {
+                "days": 0, "first": day, "last": day, "partial": prev is None, "sotuv_qty": 0, "sotuv": ZERO,
+                "new_qty": 0, "new": ZERO, "debt_qty": 0, "debt": ZERO, "qoldiq_qty": 0, "seen": set()})
+            m["days"] += 1
+            m["last"] = day
+            m["debt_qty"] = m["debt"] = m["qoldiq_qty"] = 0
+            for cid, kind, imei, qty, price in rows:
+                group = group_of(kind)
+                before = (prev or {}).get(imei) if imei else None
+                if group == "debt":
+                    m["debt_qty"] += qty
+                    m["debt"] += price * qty
+                    if prev is not None and imei and (before is None or before[1] != "debt"):
+                        m["new_qty"] += qty
+                        m["new"] += price * qty
+                elif group == "qoldiq":
+                    m["qoldiq_qty"] += qty
+                elif group == "sotuv":
+                    # a phone without an IMEI cannot be followed across days: counted on every day it is listed
+                    if imei is None or (imei not in m["seen"] and (before is None or before[1] != "sotuv")):
+                        m["sotuv_qty"] += qty
+                        m["sotuv"] += price * qty
+                    if imei:
+                        m["seen"].add(imei)
+        prev = state
+    return [NasiyaMonthRow(
+        month=month, days=m["days"], first_date=m["first"], last_date=m["last"], partial=m["partial"],
+        sotuv_qty=m["sotuv_qty"], sotuv_usd=m["sotuv"], new_debt_qty=m["new_qty"], new_debt_usd=m["new"],
+        debt_qty_end=m["debt_qty"], debt_usd_end=m["debt"], qoldiq_qty_end=m["qoldiq_qty"])
+        for month, m in sorted(out.items(), reverse=True)]

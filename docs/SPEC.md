@@ -551,8 +551,12 @@ panel and then monitored day to day.
   `NASIYA_CHAT_IDS` (empty = every stored group) is downloaded (`GetFile`, a read; nothing is posted) and ingested.
   A failure is logged and does not affect message capture.
 - `nasiya_intake` (one row per handled group message: created / duplicate / invalid) makes every message handled at
-  most once. `POST /nasiya/reports/rescan` (operator, "Guruhdan qayta o'qish") handles stored messages without a row,
-  40 per call: files sent while the bot was down or before §18.
+  most once. `POST /nasiya/reports/rescan?since=` (operator) handles stored messages without a row, sent on or after
+  `since`, oldest first: up to 25 files or 8 s per call (a Vercel function has a time limit), and `remaining` tells
+  the panel to call again. A file over 20 MB is recorded as `invalid` without downloading.
+- A new group file is confirmed automatically (`auto_confirm`) when nothing needs a decision: it has a date, no
+  errors, every sheet with phones is linked (remembered, or a clear name match as below) and no later file for that
+  day is confirmed. Anything else waits in the review queue.
 - `POST /nasiya/reports/upload` (operator, one file per request) for files from elsewhere. A file that is not a nasiya
   workbook is refused for an upload and kept as `invalid` for a group message.
 - The same bytes twice (sha256) are one report.
@@ -569,6 +573,12 @@ panel and then monitored day to day.
 - `POST /nasiya/reports/{id}/confirm {force, note}` (operator): needs a date, every sheet with phones linked, and no
   errors; `force` (admin) confirms despite errors and the panel asks for a note. A confirmed report of the same date
   becomes `superseded`. `POST …/reject {note}` (operator), `DELETE` (admin).
+- "Hammasini hisoblash" (panel button; operator): reads the group from a chosen day with the rescan above, then
+  `POST /nasiya/reports/process {since}` confirms every pending day from `since` on, oldest first. Per day the latest
+  file wins and earlier ones become `superseded` (also when a later file of that day is already confirmed). Unlinked
+  sheets get the clear-match customer (remembered). A day still having unlinked sheets waits; a day with errors waits
+  for an operator and is confirmed for an admin with the note "Hammasini hisoblash: N ta xato bilan" (the errors stay
+  on the report). The result lists the links made and every waiting day with its reason.
 
 ### 18.4 Monitoring (`nasiya_monitor`, confirmed reports only)
 - Events by IMEI against the previous confirmed day: new_debt, qoldiq_to_debt, paid (nasiya → sotuv), sold_paid,
@@ -581,7 +591,12 @@ panel and then monitored day to day.
 - Per customer: debt (nasiya + variant), qoldiq (count; value from the sheet's panel), paid today, new debt, limit and
   available (limit − debt − qoldiq value), over_limit, the sheet's own Nasiya figure (shown red when it differs from
   the IMEI sum) and the panel ledger debt (§12) for reconciliation. The workbook does not write into the §12 ledger.
+- Months (`GET /nasiya/months?count=&customer_id=`): per month of confirmed days — Sotuv (phones in the Sotuv column,
+  each IMEI once on its first day there; a row without IMEI on every day listed), new debt (IMEIs in debt that were not
+  in debt the confirmed day before; for one customer, also those moved in from another customer), and debt and qoldiq
+  on the month's last confirmed day. The month holding the first confirmed day is `partial` (no day before it).
 - `GET /nasiya/overview?on=`, `/nasiya/series?days=&customer_id=`, `/nasiya/customers/{id}?on=`, `/nasiya/imei/{imei}`
-  (viewer). Panel: "Nasiya nazorati" (Savdo group) with the daily view and the report list, a review page per report
-  (every phone by model with its IMEIs and cells), a page per customer (every phone with model, IMEI, price, since,
-  age), and a block on the Dashboard.
+  (viewer). Panel: "Nasiya nazorati" (Savdo group) with the daily view, months and the report list, a review page per
+  report (every phone by model with its IMEIs and cells), a page per customer (every phone with model, IMEI, price,
+  since, age; months), a block on the Dashboard (latest day, this month's Sotuv and new debt), a "Guruh: nasiya"
+  column in the customer list and a "Guruh hisoboti" block on the customer page (§12 figures stay separate).

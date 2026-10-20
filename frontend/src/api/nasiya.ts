@@ -267,12 +267,42 @@ export interface NasiyaRescanResult {
   created: number;
   skipped: number;
   failed: number;
+  /** Group files still to read: call again while a call makes progress. */
+  remaining: number;
+  /** New reports confirmed automatically (no errors, every sheet linked). */
+  confirmed: number;
+}
+
+export interface NasiyaProcessResult {
+  confirmed: number;
+  superseded: number;
+  /** "sheet → customer" links made by name. */
+  linked: string[];
+  waiting: { report_id: number; report_date: ISODate; file_name: string; reason: string }[];
+}
+
+export interface NasiyaMonthRow {
+  /** First day of the month. */
+  month: ISODate;
+  days: number;
+  first_date: ISODate;
+  last_date: ISODate;
+  /** The month starts the history: new debt on its first day is unknown. */
+  partial: boolean;
+  sotuv_qty: number;
+  sotuv_usd: Num;
+  new_debt_qty: number;
+  new_debt_usd: Num;
+  debt_qty_end: number;
+  debt_usd_end: Num;
+  qoldiq_qty_end: number;
 }
 
 export const nasiyaKeys = {
   all: ['nasiya'] as const,
   overview: (on?: ISODate) => ['nasiya', 'overview', on ?? null] as const,
   series: (days: number) => ['nasiya', 'series', days] as const,
+  months: (customerId?: number) => ['nasiya', 'months', customerId ?? null] as const,
   customer: (id: number, on?: ISODate) => ['nasiya', 'customer', id, on ?? null] as const,
   reports: (status?: NasiyaStatus) => ['nasiya', 'reports', status ?? null] as const,
   report: (id: number) => ['nasiya', 'report', id] as const,
@@ -285,6 +315,10 @@ export function getNasiyaOverview(on?: ISODate): Promise<NasiyaOverview> {
 
 export function getNasiyaSeries(days = 90): Promise<NasiyaSeriesPoint[]> {
   return http.get<NasiyaSeriesPoint[]>('/nasiya/series', { days });
+}
+
+export function getNasiyaMonths(customerId?: number): Promise<NasiyaMonthRow[]> {
+  return http.get<NasiyaMonthRow[]>('/nasiya/months', { customer_id: customerId });
 }
 
 export function getNasiyaCustomer(customerId: number, on?: ISODate): Promise<NasiyaCustomerDetail> {
@@ -309,8 +343,12 @@ export function uploadNasiyaReport(file: File): Promise<NasiyaUploadResult> {
   return http.upload<NasiyaUploadResult>('/nasiya/reports/upload', form);
 }
 
-export function rescanNasiyaGroup(): Promise<NasiyaRescanResult> {
-  return http.post<NasiyaRescanResult>('/nasiya/reports/rescan');
+export function rescanNasiyaGroup(since?: ISODate): Promise<NasiyaRescanResult> {
+  return http.post<NasiyaRescanResult>('/nasiya/reports/rescan', undefined, { since });
+}
+
+export function processNasiyaReports(since: ISODate | null): Promise<NasiyaProcessResult> {
+  return http.post<NasiyaProcessResult>('/nasiya/reports/process', { since });
 }
 
 export function linkNasiyaSheet(reportId: number, sheetId: number, customerId: number): Promise<NasiyaReportDetail> {

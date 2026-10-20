@@ -89,7 +89,8 @@ async def _setup_two_days(client, h):
 
 async def test_upload_creates_a_pending_report_with_items_and_suggestions(client, operator_h):
     ali = await _customer(client, operator_h, "Ali aka")
-    up = await _upload(client, operator_h, workbook("14,10,2026", DAY1), "nazorat_14.10.2026.xlsx")
+    content = workbook("14,10,2026", DAY1)  # one save: openpyxl stamps the time, a second save can differ
+    up = await _upload(client, operator_h, content, "nazorat_14.10.2026.xlsx")
     assert up["report_date"] == "2026-10-14" and up["duplicate"] is False and up["error"] is None
     d = await _detail(client, operator_h, up["report_id"])
     assert (d["status"], d["source"], d["item_count"], d["error_count"], d["unlinked_sheets"]) == (
@@ -102,7 +103,7 @@ async def test_upload_creates_a_pending_report_with_items_and_suggestions(client
         ("17 max 256", imei(1), 1500), ("17 max 256", imei(2), 1500), ("13 black 128", imei(3), 460)]
     assert d["diff"] is None  # nothing confirmed before it
 
-    again = await _upload(client, operator_h, workbook("14,10,2026", DAY1), "copy.xlsx")
+    again = await _upload(client, operator_h, content, "copy.xlsx")
     assert again["duplicate"] is True and again["report_id"] == up["report_id"]
 
 
@@ -243,7 +244,8 @@ async def _group_message(session, message_id: int, file_name: str, chat_id: int 
 
 
 async def test_telegram_documents_are_ingested_and_rescanned_once(session, monkeypatch):
-    files = {"FILE1": workbook("15,10,2026", DAY2), "FILE2": b"not excel", "FILE3": workbook("15,10,2026", DAY2)}
+    day2 = workbook("15,10,2026", DAY2)  # one save: the same bytes twice
+    files = {"FILE1": day2, "FILE2": b"not excel", "FILE3": day2}
     downloads = []
 
     async def download(file_id):
@@ -272,3 +274,67 @@ async def test_telegram_documents_are_ingested_and_rescanned_once(session, monke
     monkeypatch.setattr(nasiya_telegram, "nasiya_chat_ids", lambda: {-100})
     assert not nasiya_telegram.is_candidate(-1003839931967, "n.xlsx")
     assert nasiya_telegram.is_candidate(-100, "n.XLSX") and not nasiya_telegram.is_candidate(-100, "n.pdf")
+
+
+async def _process(client, h, since: str | None = None) -> dict:
+    r = await client.post("/api/nasiya/reports/process", json={"since": since}, headers=h)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+async def test_process_confirms_every_day_from_a_date(client, operator_h, admin_h):
+    ali = await _customer(client, operator_h, "Ali aka")
+    vali = await _customer(client, operator_h, "Vali aka")
+    old = await _upload(client, operator_h, workbook("13,10,2026", DAY1), "nazorat_13.10.2026.xlsx")
+    d1 = await _upload(client, operator_h, workbook("14,10,2026", DAY1), "nazorat_14.10.2026.xlsx")
+    first_try = {**DAY2, "Vali aka": [["Qoldiq", "15 blue 128", int(imei(6)), 1, "x"]]}
+    early = await _upload(client, operator_h, workbook("15,10,2026", first_try), "nazorat_15.10.2026.xlsx")
+    d2 = await _upload(client, operator_h, workbook("15,10,2026", DAY2), "nazorat_15.10.2026 (2).xlsx")
+    bad = {**DAY2, "Vali aka": [["Qoldiq", "15 blue 128", int(imei(6)), 1], ["Nasiya", "14 128", int(imei(9)), "900*2"]]}
+    d3 = await _upload(client, operator_h, workbook("16,10,2026", bad), "nazorat_16.10.2026.xlsx")
+
+    out = await _process(client, operator_h, "2026-10-14")
+    assert (out["confirmed"], out["superseded"]) == (2, 1)
+    assert sorted(out["linked"]) == ["Ali aka → Ali aka", "Vali aka → Vali aka"]
+    assert [(w["report_id"], w["reason"]) for w in out["waiting"]] == [
+        (d3["report_id"], "1 ta xato: administrator tasdiqlashi kerak")]
+    status = {r["id"]: r["status"] for r in (await client.get("/api/nasiya/reports", headers=operator_h)).json()}
+    assert status == {old["report_id"]: "pending", d1["report_id"]: "confirmed", early["report_id"]: "superseded",
+                      d2["report_id"]: "confirmed", d3["report_id"]: "pending"}
+
+    months = (await client.get("/api/nasiya/months", headers=operator_h)).json()
+    assert len(months) == 1
+    m = months[0]
+    assert (m["month"], m["days"], m["first_date"], m["last_date"], m["partial"]) == (
+        "2026-10-01", 2, "2026-10-14", "2026-10-15", True)
+    # 15.10: imei 1 paid (Sotuv); imei 4 (qoldiq → nasiya) and imei 8 are new debt
+    assert (m["sotuv_qty"], m["sotuv_usd"], m["new_debt_qty"], m["new_debt_usd"]) == (1, 1500, 2, 2390)
+    assert (m["debt_qty_end"], m["debt_usd_end"], m["qoldiq_qty_end"]) == (3, 2850, 3)
+    vali_months = (await client.get(f"/api/nasiya/months?customer_id={vali['id']}", headers=operator_h)).json()
+    assert (vali_months[0]["debt_qty_end"], vali_months[0]["qoldiq_qty_end"]) == (0, 1)
+
+    out = await _process(client, admin_h, "2026-10-14")  # an administrator takes the file with errors too
+    assert (out["confirmed"], out["waiting"]) == (1, [])
+    assert (await _detail(client, admin_h, d3["report_id"]))["review_note"] == "Hammasini hisoblash: 1 ta xato bilan"
+    assert ali["id"] != vali["id"]
+
+
+async def test_a_clean_group_file_of_known_customers_is_confirmed_automatically(session):
+    from app.models import Customer
+
+    session.add_all([Customer(name="Ali aka", kind="dealer"), Customer(name="Vali aka", kind="dealer")])
+    files = {"FILE1": workbook("14,10,2026", DAY1), "FILE2": workbook("15,10,2026", DAY2),
+             "FILE3": workbook("16,10,2026", {"Ali aka": [["Nasiya", "17 max 256", int(imei(1)), "1500*2"]]})}
+
+    async def download(file_id):
+        return files[file_id]
+
+    rows = [await _group_message(session, n, f"nazorat_{14 + n - 1}.10.2026.xlsx") for n in (1, 2, 3)]
+    rows[0].sent_at = datetime(2026, 10, 13, 18, tzinfo=timezone.utc)  # before the requested day: skipped
+    await session.flush()
+    result = await nasiya_telegram.rescan(session, download, since=datetime(2026, 10, 14).date(), limit=1)
+    assert (result.checked, result.created, result.confirmed, result.remaining) == (1, 1, 1, 1)
+    result = await nasiya_telegram.rescan(session, download, since=datetime(2026, 10, 14).date())
+    assert (result.checked, result.created, result.confirmed, result.remaining) == (1, 1, 0, 0)  # 1 error: waits
+    statuses = dict((await session.execute(select(NasiyaReport.report_date, NasiyaReport.status))).all())
+    assert {d.isoformat(): s for d, s in statuses.items()} == {"2026-10-15": "confirmed", "2026-10-16": "pending"}

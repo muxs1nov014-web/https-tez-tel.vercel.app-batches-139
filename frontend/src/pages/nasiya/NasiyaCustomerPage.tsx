@@ -23,6 +23,7 @@ import {
   yAxisProps,
   type Series,
 } from '../dashboard/chartKit';
+import { MonthsCard } from './MonthsCard';
 import { EventsTable } from './NasiyaPage';
 import { AgeBadge, ImeiTrailModal, KIND_LABELS, KindBadge } from './shared';
 
@@ -252,6 +253,8 @@ function CustomerView({ data }: { data: NasiyaCustomerDetail }) {
               </TableWrap>
             )}
           </Card>
+
+          <MonthsCard customerId={data.customer.id} />
 
           {data.events.length > 0 && (
             <Card title="Oldingi kun bilan farq" subtitle="Shu mijoz bo'yicha IMEI o'zgarishlari.">

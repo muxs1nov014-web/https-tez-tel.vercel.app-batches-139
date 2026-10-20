@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { errorMessage } from '../../api/client';
 import type { CustomerBalance } from '../../api/customerAccounts';
@@ -11,6 +11,7 @@ import {
   type CustomerFilter,
   type CustomerPatch,
 } from '../../api/customers';
+import { getNasiyaOverview, nasiyaKeys, type NasiyaCustomerRow } from '../../api/nasiya';
 import type { CustomerKind } from '../../api/types';
 import { Can } from '../../components/Can';
 import { Alert } from '../../components/ui/Alert';
@@ -46,6 +47,13 @@ export function CustomersPage() {
     () => new Map((balances.data ?? []).map((b) => [b.customer.id, b])),
     [balances.data],
   );
+  // The group's daily Excel (SPEC §18): the latest confirmed day per customer. Optional: the list renders without it.
+  const nasiya = useQuery({ queryKey: nasiyaKeys.overview(), queryFn: () => getNasiyaOverview() });
+  const nasiyaById = useMemo(
+    () => new Map((nasiya.data?.customers ?? []).map((r) => [r.customer.id, r])),
+    [nasiya.data],
+  );
+  const nasiyaDate = nasiya.data?.report?.report_date ?? null;
   const [editing, setEditing] = useState<Customer | 'new' | null>(null);
   // iPhone: rows open the customer; in edit mode ("Tahrirlash") they open the editor instead.
   const [editMode, setEditMode] = useState(false);
@@ -149,6 +157,9 @@ export function CustomersPage() {
                       <th className="num">Nasiya ($)</th>
                       <th className="num">Qo'lidagi mol</th>
                       <th className="num">Shu oy sotuv</th>
+                      <th className="num" title="«Telefon nasiya nazorat» guruhidagi Excel, oxirgi hisoblangan kun">
+                        Guruh: nasiya{nasiyaDate ? ` · ${fmtDate(nasiyaDate)}` : ''}
+                      </th>
                       <th>Izoh</th>
                       <th>Holati</th>
                       {canWrite && <th />}
@@ -167,6 +178,7 @@ export function CustomersPage() {
                         </td>
                         <td className="whitespace-nowrap tabular-nums">{c.phone ?? <span className="text-slate-300">—</span>}</td>
                         <BalanceCells balance={balanceById.get(c.id)} loading={balances.isPending} />
+                        <NasiyaCell row={nasiyaById.get(c.id)} customerId={c.id} />
                         <td className="max-w-sm truncate text-slate-500" title={c.note ?? undefined}>
                           {c.note ?? ''}
                         </td>
@@ -199,6 +211,9 @@ export function CustomersPage() {
                       ) : (
                         <td colSpan={3} />
                       )}
+                      <td className="num">
+                        {nasiya.data?.report && fmtUsd(sumNasiya(rows, nasiyaById), { symbol: true })}
+                      </td>
                       <td colSpan={canWrite ? 3 : 2} />
                     </tr>
                   </tfoot>
@@ -225,6 +240,27 @@ const KIND_SEGMENTS: { key: KindSegment; label: string }[] = [
 ];
 
 const KIND_ORDER: CustomerKind[] = ['dealer', 'client'];
+
+function sumNasiya(rows: Customer[], byId: Map<number, NasiyaCustomerRow>): number {
+  return rows.reduce((sum, c) => sum + toNum(byId.get(c.id)?.totals.debt_usd), 0);
+}
+
+/** Nasiya, qoldiq and today's paid phones from the group's Excel; "—" when the customer has no sheet there. */
+function NasiyaCell({ row, customerId }: { row: NasiyaCustomerRow | undefined; customerId: number }) {
+  if (!row) return <td className="num text-slate-300">—</td>;
+  const t = row.totals;
+  return (
+    <td className="num">
+      <Link to={`/nasiya/customers/${customerId}`} className={row.over_limit ? 'text-danger-600 hover:underline' : 'hover:underline'}>
+        {fmtUsd(t.debt_usd, { symbol: true })}
+      </Link>
+      <div className="text-[11px] font-normal text-slate-500">
+        {fmtQty(t.debt_qty)} dona · qoldiq {fmtQty(t.qoldiq_qty)}
+        {t.sotuv_qty > 0 && <> · to'landi {fmtQty(t.sotuv_qty)}</>}
+      </div>
+    </td>
+  );
+}
 
 interface BalanceTotals {
   debt: number;

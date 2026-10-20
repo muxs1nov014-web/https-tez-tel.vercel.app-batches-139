@@ -103,7 +103,7 @@ async def capture(message: Message) -> None:
 
 async def _ingest_nasiya(message: Message) -> None:
     """A daily nasiya workbook (SPEC §18): download it and queue it for review. Reading only: nothing is posted.
-    A failure is logged; the stored message lets an operator retry with "Guruhdan qayta o'qish" in the panel."""
+    A failure is logged; the stored message lets an operator retry with "Hammasini hisoblash" in the panel."""
     async def download(file_id: str) -> bytes:
         return (await message.bot.download(file_id)).getvalue()
 

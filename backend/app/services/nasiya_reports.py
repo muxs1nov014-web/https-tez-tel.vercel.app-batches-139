@@ -27,6 +27,8 @@ from app.schemas import (
     NasiyaIssueOut,
     NasiyaItemOut,
     NasiyaKindTotal,
+    NasiyaProcessOut,
+    NasiyaProcessWaiting,
     NasiyaReportDetail,
     NasiyaReportSummary,
     NasiyaSheetOut,
@@ -241,7 +243,35 @@ async def link_sheet(session: AsyncSession, report_id: int, sheet_id: int, custo
     await session.flush()
 
 
-async def confirm(session: AsyncSession, report_id: int, user_id: int, *, force: bool, note: str | None) -> NasiyaReport:
+def _unlinked_with_phones(report_id: int):
+    return select(NasiyaSheet).where(
+        NasiyaSheet.report_id == report_id, NasiyaSheet.customer_id.is_(None),
+        select(NasiyaItem.id).where(NasiyaItem.sheet_id == NasiyaSheet.id).exists()).order_by(NasiyaSheet.position)
+
+
+async def auto_link(session: AsyncSession, report_id: int, user_id: int | None) -> list[str]:
+    """Link each unlinked sheet that has phones to the customer suggest_customer clearly matches, and remember it.
+
+    Returns 'sheet → customer' lines. A sheet without a clear match stays for the operator."""
+    sheets = list((await session.execute(_unlinked_with_phones(report_id))).scalars())
+    if not sheets:
+        return []
+    customers = list((await session.execute(select(Customer).where(Customer.is_active))).scalars())
+    taken = set((await session.execute(select(NasiyaSheet.customer_id).where(
+        NasiyaSheet.report_id == report_id, NasiyaSheet.customer_id.is_not(None)))).scalars())
+    linked = []
+    for sheet in sheets:
+        customer = suggest_customer(sheet.name, customers, taken)
+        if customer is None:
+            continue
+        await link_sheet(session, report_id, sheet.id, customer.id, user_id)
+        taken.add(customer.id)
+        linked.append(f"{sheet.name} → {customer.name}")
+    return linked
+
+
+async def confirm(session: AsyncSession, report_id: int, user_id: int | None, *, force: bool,
+                  note: str | None) -> NasiyaReport:
     report = await get_report(session, report_id)
     if report.status == "confirmed":
         raise Conflict("Hisobot allaqachon tasdiqlangan")
@@ -249,10 +279,7 @@ async def confirm(session: AsyncSession, report_id: int, user_id: int, *, force:
         raise ValidationFailed("Bu faylni tasdiqlab bo'lmaydi: u nasiya hisoboti emas")
     if report.report_date is None:
         raise ValidationFailed("Hisobot sanasi aniqlanmagan")
-    unlinked = list((await session.execute(
-        select(NasiyaSheet.name).where(NasiyaSheet.report_id == report_id, NasiyaSheet.customer_id.is_(None),
-                                       select(NasiyaItem.id).where(NasiyaItem.sheet_id == NasiyaSheet.id).exists())
-    )).scalars())
+    unlinked = [s.name for s in (await session.execute(_unlinked_with_phones(report_id))).scalars()]
     if unlinked:
         raise ValidationFailed("Mijozga bog'lanmagan varaqlar: " + ", ".join(unlinked))
     if report.error_count and not force:
@@ -290,4 +317,71 @@ async def delete(session: AsyncSession, report_id: int) -> None:
 async def pending_count(session: AsyncSession) -> int:
     return int((await session.execute(
         select(func.count()).select_from(NasiyaReport).where(NasiyaReport.status == "pending"))).scalar_one())
+
+
+async def _newer_confirmed(session: AsyncSession, report: NasiyaReport) -> bool:
+    """A later file for the same day is already confirmed: this one is an older copy."""
+    return (await session.execute(select(NasiyaReport.id).where(
+        NasiyaReport.report_date == report.report_date, NasiyaReport.status == "confirmed",
+        NasiyaReport.id > report.id).limit(1))).first() is not None
+
+
+async def auto_confirm(session: AsyncSession, report: NasiyaReport) -> bool:
+    """A group file is confirmed without an operator when nothing needs a decision: it has a date, no errors,
+    every sheet with phones belongs to a customer (remembered or clearly matching by name) and no later file for
+    that day is confirmed. Anything else waits in the review queue."""
+    if report.status != "pending" or report.report_date is None or report.error_count:
+        return False
+    if await _newer_confirmed(session, report):
+        return False
+    await auto_link(session, report.id, None)
+    if (await session.execute(_unlinked_with_phones(report.id).limit(1))).first() is not None:
+        return False
+    await confirm(session, report.id, None, force=False, note="Avtomatik: xatosiz, hamma varaq mijozga bog'langan")
+    return True
+
+
+async def process_pending(session: AsyncSession, user_id: int, *, since: date | None,
+                          allow_errors: bool) -> NasiyaProcessOut:
+    """Confirm every pending day from `since` on (SPEC §18.3, "Hammasini hisoblash").
+
+    Per day the latest file wins; earlier files of that day become 'superseded'. Sheets are linked by remembered
+    or clearly matching names. A day with unlinked sheets waits; a day with errors waits unless an administrator
+    runs this (allow_errors): it is then confirmed with a note and its errors stay listed on the report."""
+    stmt = (select(NasiyaReport).where(NasiyaReport.status == "pending", NasiyaReport.report_date.is_not(None))
+            .order_by(NasiyaReport.report_date, NasiyaReport.id))
+    if since is not None:
+        stmt = stmt.where(NasiyaReport.report_date >= since)
+    by_day: dict[date, list[NasiyaReport]] = defaultdict(list)
+    for report in (await session.execute(stmt)).scalars():
+        by_day[report.report_date].append(report)
+    out = NasiyaProcessOut(confirmed=0, superseded=0, linked=[], waiting=[])
+    now = datetime.now(timezone.utc)
+    for day, reports in by_day.items():
+        *older, latest = reports
+        if await _newer_confirmed(session, latest):
+            older.append(latest)
+            latest = None
+        for report in older:
+            report.status, report.reviewed_at, report.reviewed_by = "superseded", now, user_id
+            report.review_note = "Shu kun uchun keyingi fayl hisobga olindi"
+            out.superseded += 1
+        if latest is None:
+            continue
+        out.linked.extend(await auto_link(session, latest.id, user_id))
+        unlinked = [s.name for s in (await session.execute(_unlinked_with_phones(latest.id))).scalars()]
+        reason = None
+        if unlinked:
+            reason = "Mijozga bog'lanmagan varaqlar: " + ", ".join(unlinked)
+        elif latest.error_count and not allow_errors:
+            reason = f"{latest.error_count} ta xato: administrator tasdiqlashi kerak"
+        if reason:
+            out.waiting.append(NasiyaProcessWaiting(report_id=latest.id, report_date=day, file_name=latest.file_name,
+                                                    reason=reason))
+            continue
+        note = "Hammasini hisoblash" + (f": {latest.error_count} ta xato bilan" if latest.error_count else "")
+        await confirm(session, latest.id, user_id, force=True, note=note)
+        out.confirmed += 1
+    await session.flush()
+    return out
 

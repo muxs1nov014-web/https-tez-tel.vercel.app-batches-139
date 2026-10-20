@@ -75,7 +75,13 @@ Harakat va to'lovni faqat administrator o'chira oladi.
 
 ### Nasiya nazorati (kunlik Excel)
 «Telefon nasiya nazorat» guruhiga har kuni tashlanadigan Excel faylni bot o'zi oladi va tekshiradi.
-Fayl **Nasiya nazorati → Hisobotlar** bo'limida «Tekshirilmoqda» holatida paydo bo'ladi.
+Xatosiz va hamma varag'i mijozga bog'langan fayl o'zi hisoblanadi. Qolganlari **Nasiya nazorati → Hisobotlar**
+bo'limida «Tekshirilmoqda» holatida kutadi.
+
+**Hammasini hisoblash** (Nasiya nazorati yoki Dashboard'da): kunni tanlang (masalan, oyning 1-kuni) — bot guruhdagi
+shu kundan keyingi hamma fayllarni o'qiydi va har bir kunni hisoblaydi. Bir kunga bir nechta fayl bo'lsa, oxirgisi
+olinadi. Varaq nomi mijoz nomiga aniq mos kelsa, o'zi bog'lanadi. Xatosi bor kunlarni administrator bosganda hisoblanadi
+(xatolar hisobotda ko'rinib turadi); operator bosganda ular kutib turadi. Natijada kutib turgan kunlar va sababi chiqadi.
 
 Excel qanday yozilishi kerak (bot shunday o'qiydi):
 - Har bir varaq — bitta mijoz. Tepada sana (`15,10,2026`) va ism.
@@ -98,8 +104,10 @@ yangi nasiya, to'langan (Nasiya → Sotuv), qoldiqdan nasiyaga o'tgan telefonlar
 nasiyadan izsiz chiqqan (Sotuv'da ham yo'q), boshqa mijozga o'tgan, narxi o'zgargan, to'langan telefon qayta chiqqan.
 Mijozlar jadvalida: nasiya, varaqdagi o'z hisobi (farq bo'lsa qizil), qoldiq, limit va bo'sh limit, eng eski nasiya (kun).
 Mijoz nomini bossangiz — har bir telefon: model, IMEI, narx, qachondan va necha kundan beri turibdi.
-IMEI ni bossangiz — telefonning kunma-kun tarixi. Guruhga bot o'chiq paytda tashlangan fayllar uchun
-**Guruhdan qayta o'qish** tugmasini bosing; boshqa joydan olingan faylni **Excel yuklash** bilan qo'shing.
+IMEI ni bossangiz — telefonning kunma-kun tarixi. **Oylar kesimida**: oyning sotuvi (Sotuv ustunidagi telefonlar,
+har biri bir marta), yangi nasiya, oy oxiridagi nasiya va qoldiq. Shu raqamlar **Mijozlar** ro'yxatida («Guruh: nasiya»
+ustuni), mijoz sahifasida («Guruh hisoboti») va Dashboard'da ham ko'rinadi. Guruhga bot o'chiq paytda tashlangan fayllar uchun
+**Hammasini hisoblash** ni bosing; boshqa joydan olingan faylni **Excel yuklash** bilan qo'shing.
 
 ## 4. Telegram bot
 Botga yozing yoki ovozli xabar yuboring. Masalan:

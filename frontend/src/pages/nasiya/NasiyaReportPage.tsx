@@ -597,7 +597,7 @@ function DeleteDialog({
     <ConfirmDialog
       open={open}
       title="Hisobotni o'chirish"
-      message="Fayl va undagi barcha telefonlar o'chiriladi. Guruhdagi xabar qoladi: «Guruhdan qayta o'qish» uni qayta olmaydi."
+      message="Fayl va undagi barcha telefonlar o'chiriladi. Guruhdagi xabar qoladi: «Hammasini hisoblash» uni qayta olmaydi."
       loading={mutation.isPending}
       error={mutation.isError ? errorMessage(mutation.error) : null}
       onConfirm={() => mutation.mutate()}

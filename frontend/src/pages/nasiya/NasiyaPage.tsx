@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { errorMessage } from '../../api/client';
@@ -8,7 +8,6 @@ import {
   getNasiyaSeries,
   listNasiyaReports,
   nasiyaKeys,
-  rescanNasiyaGroup,
   uploadNasiyaReport,
   type NasiyaAgingBucket,
   type NasiyaCustomerRow,
@@ -22,7 +21,7 @@ import { Alert } from '../../components/ui/Alert';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card, TableWrap } from '../../components/ui/Card';
-import { BanknotesIcon, ClipboardCheckIcon, RefreshIcon, TrendUpIcon, UploadIcon, WarningIcon } from '../../components/ui/icons';
+import { BanknotesIcon, ClipboardCheckIcon, TrendUpIcon, UploadIcon, WarningIcon } from '../../components/ui/icons';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { EmptyState, QueryView } from '../../components/ui/States';
 import { StatCard } from '../../components/ui/StatCard';
@@ -42,6 +41,8 @@ import {
   yAxisProps,
   type Series,
 } from '../dashboard/chartKit';
+import { MonthsCard } from './MonthsCard';
+import { ProcessButton } from './ProcessButton';
 import { EVENT_HINTS, EVENT_LABELS, ImeiSearch, ImeiTrailModal, StatusBadge } from './shared';
 
 type TabKey = 'overview' | 'reports';
@@ -63,7 +64,7 @@ export function NasiyaPage() {
         subtitle="«Telefon nasiya nazorat» guruhidagi kunlik Excel: har bir telefon IMEI bo'yicha. Fayl avval tekshiriladi, tasdiqlangan kunlar nazoratga kiradi."
         actions={
           <Can do="nasiya.review">
-            <RescanButton />
+            <ProcessButton />
             <UploadButton />
           </Can>
         }
@@ -132,30 +133,6 @@ function UploadButton() {
   );
 }
 
-function RescanButton() {
-  const toast = useToast();
-  const queryClient = useQueryClient();
-  const mutation = useMutation({
-    mutationFn: rescanNasiyaGroup,
-    onSuccess: async (r) => {
-      await queryClient.invalidateQueries({ queryKey: nasiyaKeys.all });
-      if (r.checked === 0) toast.success("Guruhda yangi Excel fayl yo'q");
-      else
-        toast.success(
-          `${r.checked} ta fayl ko'rildi: ${r.created} ta yangi hisobot` +
-            (r.skipped ? `, ${r.skipped} tasi o'tkazildi` : '') +
-            (r.failed ? `, ${r.failed} tasini yuklab bo'lmadi` : ''),
-        );
-    },
-    onError: (err) => toast.error(errorMessage(err)),
-  });
-  return (
-    <Button loading={mutation.isPending} icon={<RefreshIcon className="h-4 w-4" />} onClick={() => mutation.mutate()}>
-      Guruhdan qayta o'qish
-    </Button>
-  );
-}
-
 // ---- overview ----
 function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
@@ -167,11 +144,16 @@ function OverviewView({ data }: { data: NasiyaOverview }) {
     return (
       <Card>
         <EmptyState
-          title="Hali tasdiqlangan hisobot yo'q"
+          title="Hali hisoblangan kun yo'q"
           description={
             data.pending_reports
-              ? `${data.pending_reports} ta hisobot tekshirishni kutmoqda: «Hisobotlar» bo'limida varaqlarni mijozlarga bog'lab tasdiqlang.`
-              : "Guruhga kunlik Excel tushganda yoki «Excel yuklash» bilan fayl qo'shilganda shu yerda ko'rinadi."
+              ? `${data.pending_reports} ta hisobot kutmoqda. «Hammasini hisoblash» ni bosing: guruhdagi fayllar o'qiladi va kunlar hisoblanadi.`
+              : "«Hammasini hisoblash» ni bosing: guruhdagi Excel fayllar o'qiladi va har bir kun hisoblanadi."
+          }
+          action={
+            <Can do="nasiya.review">
+              <ProcessButton />
+            </Can>
           }
         />
       </Card>
@@ -257,6 +239,8 @@ function OverviewView({ data }: { data: NasiyaOverview }) {
         </div>
         <AgingCard aging={data.aging} historyStart={data.history_start} />
       </div>
+
+      <MonthsCard />
 
       <CustomersCard rows={data.customers} />
 

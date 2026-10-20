@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../components/ui/States
 import { StatCard } from '../../components/ui/StatCard';
 import { Tabs } from '../../components/ui/Tabs';
 import { CUSTOMER_KIND_LABELS } from '../../lib/categories';
+import { NasiyaCustomerBlock } from '../nasiya/NasiyaCustomerBlock';
 import { fmtDate, fmtQty, fmtUsd, signClass } from '../../lib/format';
 import { useCustomerOverview } from '../../lib/queries';
 import { ConsignmentModal, type ConsignmentMode } from './ConsignmentModal';
@@ -177,6 +178,8 @@ function CustomerDetailView({ customerId, overview }: { customerId: number; over
           sub={`${fmtQty(b.sales_month_qty)} dona`}
         />
       </div>
+
+      <NasiyaCustomerBlock customerId={customerId} />
 
       <div>
         <div className={FILL_SEGMENTS}>

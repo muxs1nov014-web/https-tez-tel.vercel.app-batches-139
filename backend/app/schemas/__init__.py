@@ -875,6 +875,26 @@ class NasiyaRescanOut(BaseModel):
     created: int
     skipped: int
     failed: int
+    remaining: int = 0  # group files still to read: the panel repeats the call while it makes progress
+    confirmed: int = 0  # new reports confirmed automatically (nasiya_reports.auto_confirm)
+
+
+class NasiyaProcessIn(BaseModel):
+    since: date | None = None
+
+
+class NasiyaProcessWaiting(BaseModel):
+    report_id: int
+    report_date: date
+    file_name: str
+    reason: str
+
+
+class NasiyaProcessOut(BaseModel):
+    confirmed: int
+    superseded: int
+    linked: list[str]  # 'sheet → customer' links made by name
+    waiting: list[NasiyaProcessWaiting]
 
 
 class NasiyaAgingBucket(BaseModel):
@@ -937,6 +957,21 @@ class NasiyaSeriesPoint(BaseModel):
     qoldiq_qty: int
     sotuv_usd: Num
     sotuv_qty: int
+
+
+class NasiyaMonthRow(BaseModel):
+    month: date  # first day of the month
+    days: int  # confirmed days in the month
+    first_date: date
+    last_date: date
+    partial: bool  # the month starts the history: its first day has no day before, so new debt is a lower bound
+    sotuv_qty: int  # paid / sold phones (Sotuv column), each IMEI once
+    sotuv_usd: Num
+    new_debt_qty: int
+    new_debt_usd: Num
+    debt_qty_end: int  # on the month's last confirmed day
+    debt_usd_end: Num
+    qoldiq_qty_end: int
 
 
 class NasiyaDebtItemOut(BaseModel):
