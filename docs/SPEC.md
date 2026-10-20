@@ -554,9 +554,13 @@ panel and then monitored day to day.
   most once. `POST /nasiya/reports/rescan?since=` (operator) handles stored messages without a row, sent on or after
   `since`, oldest first: up to 25 files or 8 s per call (a Vercel function has a time limit), and `remaining` tells
   the panel to call again. A file over 20 MB is recorded as `invalid` without downloading.
-- A new group file is confirmed automatically (`auto_confirm`) when nothing needs a decision: it has a date, no
-  errors, every sheet with phones is linked (remembered, or a clear name match as below) and no later file for that
-  day is confirmed. Anything else waits in the review queue.
+- A new group file is confirmed on arrival (`auto_confirm`) when it has a date, every sheet with phones is linked
+  (remembered, or a clear name match as below) and no later file for that day is confirmed. A file with errors is
+  confirmed too, noted "Avtomatik: N ta xato bilan"; the errors stay on the report and the daily view and the
+  Dashboard flag the day. Only a sheet that matches no customer keeps the file waiting in the review queue.
+- Daily catch-up: Vercel Cron (`vercel.json`, 05:00 UTC = 10:00 Tashkent) calls `GET /api/nasiya/cron` with
+  `Authorization: Bearer $CRON_SECRET` (no secret = off, 403). It reads group files the webhook missed (one rescan
+  call) and confirms every pending day as an admin would ("Kunlik avtomatik hisoblash"), uploads included.
 - "Telegramdan yangilash" (panel button; operator): the rescan above for every unhandled file, no date. When nothing
   was read, `GET /nasiya/bot-status` (operator) explains why from Telegram (getMe privacy flag, getWebhookInfo, the
   bot's member status in each stored or configured group) and the stored counts: with privacy on and the bot not an

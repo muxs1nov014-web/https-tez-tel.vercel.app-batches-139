@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     # Webhook mode (Vercel, SPEC §16): Telegram sends this in X-Telegram-Bot-Api-Secret-Token. Empty = webhook off.
     telegram_webhook_secret: str = ""
+    cron_secret: str = ""  # CRON_SECRET: Vercel Cron sends it as "Authorization: Bearer …" (SPEC §18.2)
     # Groups whose messages the bot stores (SPEC §14), comma-separated chat IDs. Empty = every group it is in.
     telegram_group_ids: str = ""
     # Daily nasiya workbooks (SPEC §18): groups whose .xlsx files become nasiya reports. Empty = every stored group.

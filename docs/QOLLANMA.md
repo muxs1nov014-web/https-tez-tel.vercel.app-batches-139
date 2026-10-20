@@ -75,8 +75,11 @@ Harakat va to'lovni faqat administrator o'chira oladi.
 
 ### Nasiya nazorati (kunlik Excel)
 «Telefon nasiya nazorat» guruhiga har kuni tashlanadigan Excel faylni bot o'zi oladi va tekshiradi.
-Xatosiz va hamma varag'i mijozga bog'langan fayl o'zi hisoblanadi. Qolganlari **Nasiya nazorati → Hisobotlar**
-bo'limida «Tekshirilmoqda» holatida kutadi.
+Hamma varag'i mijozga bog'langan fayl kelishi bilan o'zi hisoblanadi. Faylda xato bo'lsa ham hisoblanadi, lekin
+Dashboard'da va «Kunlik nazorat»da ogohlantirish chiqadi: Excel'da tuzatib guruhga qayta tashlansa, shu kun yangilanadi.
+Har kuni soat 10:00 da tizim o'zi tekshiradi: bot o'tkazib yuborgan yoki «Excel yuklash» bilan qo'shilgan fayllar ham
+hisoblanadi. Faqat varaq nomi hech bir mijozga mos kelmasa, fayl **Nasiya nazorati → Hisobotlar** bo'limida kutadi —
+varaqni mijozga bir marta bog'lang.
 
 **Telegramdan yangilash** — guruhdagi yangi fayllarni hozir o'qiydi. Fayl topilmasa, sababini ko'rsatadi (masalan,
 bot guruhda admin emas — unda bot fayllarni ko'rmaydi: botni guruhda **administrator** qiling). Telegram botga eski

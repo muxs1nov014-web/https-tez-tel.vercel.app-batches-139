@@ -1,9 +1,10 @@
 """Daily nasiya control (SPEC §18). Read = viewer; review (link, confirm, reject, upload, rescan) = operator;
 confirming despite errors and deleting = admin."""
 
+import hmac
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Header, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ROLE_RANK, admin, operator, viewer
@@ -92,10 +93,7 @@ async def upload(file: UploadFile = File(...), user: User = Depends(operator),
                            duplicate=not created, error=None)
 
 
-@router.post("/reports/rescan", response_model=NasiyaRescanOut, dependencies=[Depends(operator)])
-async def rescan(since: date | None = None, session: AsyncSession = Depends(get_session)):
-    if not get_settings().telegram_bot_token:
-        raise ValidationFailed("Bot sozlanmagan (TELEGRAM_BOT_TOKEN yo'q)")
+async def _rescan(session: AsyncSession, since: date | None) -> NasiyaRescanOut:
     from app.bot import webhook  # aiogram loads only when needed
 
     bot = webhook.make_bot()
@@ -103,11 +101,32 @@ async def rescan(since: date | None = None, session: AsyncSession = Depends(get_
         async def download(file_id: str) -> bytes:
             return (await bot.download(file_id)).getvalue()
 
-        result = await nasiya_telegram.rescan(session, download, since=since)
+        return await nasiya_telegram.rescan(session, download, since=since)
     finally:
         await bot.session.close()
+
+
+@router.post("/reports/rescan", response_model=NasiyaRescanOut, dependencies=[Depends(operator)])
+async def rescan(since: date | None = None, session: AsyncSession = Depends(get_session)):
+    if not get_settings().telegram_bot_token:
+        raise ValidationFailed("Bot sozlanmagan (TELEGRAM_BOT_TOKEN yo'q)")
+    result = await _rescan(session, since)
     await session.commit()
     return result
+
+
+@router.get("/cron", include_in_schema=False)
+async def daily(authorization: str | None = Header(None), session: AsyncSession = Depends(get_session)):
+    """Vercel Cron, once a day (vercel.json): read group files the webhook missed, then count every pending day
+    (files with errors too, noted). Sheets that match no customer keep their day waiting for an operator."""
+    secret = get_settings().cron_secret
+    if not secret or not hmac.compare_digest((authorization or "").encode(), f"Bearer {secret}".encode()):
+        raise Forbidden("Ruxsat yo'q")
+    read = await _rescan(session, None) if get_settings().telegram_bot_token else None
+    await session.commit()
+    processed = await nasiya_reports.process_pending(session, None, since=None, allow_errors=True)
+    await session.commit()
+    return {"read": read, "processed": processed}
 
 
 @router.get("/bot-status", response_model=NasiyaBotStatus, dependencies=[Depends(operator)])

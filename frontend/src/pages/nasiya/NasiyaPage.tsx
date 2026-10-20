@@ -185,6 +185,15 @@ function OverviewView({ data }: { data: NasiyaOverview }) {
         {data.previous_date && <span>· taqqoslash: {fmtDate(data.previous_date)}</span>}
         {data.report.reviewed_by && <span>· tasdiqladi: {data.report.reviewed_by}</span>}
       </div>
+      {data.report.error_count > 0 && (
+        <Alert tone="warning" title={`Bu kun faylida ${fmtQty(data.report.error_count)} ta xato bor`}>
+          Kun hisoblandi, lekin xato qatorlar (IMEI, soni, narxi) raqamlarga ta'sir qilishi mumkin.{' '}
+          <Link to={`/nasiya/reports/${data.report.id}`} className="font-medium underline">
+            Xatolarni ko'rish
+          </Link>{' '}
+          — Excel'da tuzatib guruhga qayta tashlansa, shu kun o'zi yangilanadi.
+        </Alert>
+      )}
       {gap > 1 && (
         <Alert tone="info">
           Oldingi tasdiqlangan kun {fmtDate(data.previous_date)} ({gap} kun oldin). Quyidagi o'zgarishlar shu {gap} kunlik

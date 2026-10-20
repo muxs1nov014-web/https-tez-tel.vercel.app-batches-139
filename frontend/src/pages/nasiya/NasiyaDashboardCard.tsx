@@ -45,6 +45,15 @@ export function NasiyaDashboardCard() {
             </Link>
           </Alert>
         )}
+        {data.report && data.report.error_count > 0 && (
+          <Alert tone="warning">
+            {fmtDate(data.report.report_date)} faylida {fmtQty(data.report.error_count)} ta xato bor — kun hisoblandi,
+            lekin xatolarni tekshiring.{' '}
+            <Link to={`/nasiya/reports/${data.report.id}`} className="font-medium underline">
+              Hisobotni ochish
+            </Link>
+          </Alert>
+        )}
         {!t ? (
           <p className="px-1 text-[13px] text-slate-500">
             Hali hisoblangan kun yo'q. «Hammasini hisoblash» guruhdagi fayllarni o'qib, har bir kunni hisoblaydi.

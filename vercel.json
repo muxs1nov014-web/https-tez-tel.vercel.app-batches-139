@@ -16,6 +16,12 @@
       "entrypoint": "index:app"
     }
   },
+  "crons": [
+    {
+      "path": "/api/nasiya/cron",
+      "schedule": "0 5 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",

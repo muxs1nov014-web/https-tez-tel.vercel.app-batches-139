@@ -327,21 +327,23 @@ async def _newer_confirmed(session: AsyncSession, report: NasiyaReport) -> bool:
 
 
 async def auto_confirm(session: AsyncSession, report: NasiyaReport) -> bool:
-    """A group file is confirmed without an operator when nothing needs a decision: it has a date, no errors,
-    every sheet with phones belongs to a customer (remembered or clearly matching by name) and no later file for
-    that day is confirmed. Anything else waits in the review queue."""
-    if report.status != "pending" or report.report_date is None or report.error_count:
+    """A group file is counted as soon as it arrives when it has a date, every sheet with phones belongs to a
+    customer (remembered or clearly matching by name) and no later file for that day is confirmed. A file with
+    errors is counted too, with a note: the errors stay on the report and the panel flags the day. A sheet that
+    matches no customer is the one thing that waits for an operator."""
+    if report.status != "pending" or report.report_date is None:
         return False
     if await _newer_confirmed(session, report):
         return False
     await auto_link(session, report.id, None)
     if (await session.execute(_unlinked_with_phones(report.id).limit(1))).first() is not None:
         return False
-    await confirm(session, report.id, None, force=False, note="Avtomatik: xatosiz, hamma varaq mijozga bog'langan")
+    note = f"Avtomatik: {report.error_count} ta xato bilan" if report.error_count else "Avtomatik: xatosiz"
+    await confirm(session, report.id, None, force=True, note=note)
     return True
 
 
-async def process_pending(session: AsyncSession, user_id: int, *, since: date | None,
+async def process_pending(session: AsyncSession, user_id: int | None, *, since: date | None,
                           allow_errors: bool) -> NasiyaProcessOut:
     """Confirm every pending day from `since` on (SPEC §18.3, "Hammasini hisoblash").
 
@@ -379,7 +381,8 @@ async def process_pending(session: AsyncSession, user_id: int, *, since: date | 
             out.waiting.append(NasiyaProcessWaiting(report_id=latest.id, report_date=day, file_name=latest.file_name,
                                                     reason=reason))
             continue
-        note = "Hammasini hisoblash" + (f": {latest.error_count} ta xato bilan" if latest.error_count else "")
+        label = "Hammasini hisoblash" if user_id is not None else "Kunlik avtomatik hisoblash"
+        note = label + (f": {latest.error_count} ta xato bilan" if latest.error_count else "")
         await confirm(session, latest.id, user_id, force=True, note=note)
         out.confirmed += 1
     await session.flush()
