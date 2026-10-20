@@ -78,6 +78,10 @@ Harakat va to'lovni faqat administrator o'chira oladi.
 Xatosiz va hamma varag'i mijozga bog'langan fayl o'zi hisoblanadi. Qolganlari **Nasiya nazorati → Hisobotlar**
 bo'limida «Tekshirilmoqda» holatida kutadi.
 
+**Telegramdan yangilash** — guruhdagi yangi fayllarni hozir o'qiydi. Fayl topilmasa, sababini ko'rsatadi (masalan,
+bot guruhda admin emas — unda bot fayllarni ko'rmaydi: botni guruhda **administrator** qiling). Telegram botga eski
+xabarlarni bermaydi: bot ko'rmagan kunlarning fayllarini Telegram'dan saqlab, **Excel yuklash** bilan qo'shing.
+
 **Hammasini hisoblash** (Nasiya nazorati yoki Dashboard'da): kunni tanlang (masalan, oyning 1-kuni) — bot guruhdagi
 shu kundan keyingi hamma fayllarni o'qiydi va har bir kunni hisoblaydi. Bir kunga bir nechta fayl bo'lsa, oxirgisi
 olinadi. Varaq nomi mijoz nomiga aniq mos kelsa, o'zi bog'lanadi. Xatosi bor kunlarni administrator bosganda hisoblanadi

@@ -557,6 +557,11 @@ panel and then monitored day to day.
 - A new group file is confirmed automatically (`auto_confirm`) when nothing needs a decision: it has a date, no
   errors, every sheet with phones is linked (remembered, or a clear name match as below) and no later file for that
   day is confirmed. Anything else waits in the review queue.
+- "Telegramdan yangilash" (panel button; operator): the rescan above for every unhandled file, no date. When nothing
+  was read, `GET /nasiya/bot-status` (operator) explains why from Telegram (getMe privacy flag, getWebhookInfo, the
+  bot's member status in each stored or configured group) and the stored counts: with privacy on and the bot not an
+  administrator, Telegram delivers commands only. A bot cannot fetch earlier messages: files it never saw are added
+  with "Excel yuklash".
 - `POST /nasiya/reports/upload` (operator, one file per request) for files from elsewhere. A file that is not a nasiya
   workbook is refused for an upload and kept as `invalid` for a group message.
 - The same bytes twice (sha256) are one report.

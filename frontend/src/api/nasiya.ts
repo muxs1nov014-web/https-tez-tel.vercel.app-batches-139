@@ -273,6 +273,29 @@ export interface NasiyaRescanResult {
   confirmed: number;
 }
 
+export interface NasiyaBotGroup {
+  chat_id: number;
+  title: string;
+  messages: number;
+  excel_files: number;
+  last_message_at: string | null;
+  /** administrator, member, left, kicked; "unknown" when Telegram did not answer. */
+  bot_status: string;
+  error: string | null;
+}
+
+export interface NasiyaBotStatus {
+  bot_username: string;
+  can_read_all_group_messages: boolean;
+  webhook_set: boolean;
+  webhook_error: string | null;
+  pending_updates: number;
+  nasiya_chat_ids: number[];
+  groups: NasiyaBotGroup[];
+  /** Plain-language reasons files do not arrive; empty = fine. */
+  problems: string[];
+}
+
 export interface NasiyaProcessResult {
   confirmed: number;
   superseded: number;
@@ -345,6 +368,10 @@ export function uploadNasiyaReport(file: File): Promise<NasiyaUploadResult> {
 
 export function rescanNasiyaGroup(since?: ISODate): Promise<NasiyaRescanResult> {
   return http.post<NasiyaRescanResult>('/nasiya/reports/rescan', undefined, { since });
+}
+
+export function getNasiyaBotStatus(): Promise<NasiyaBotStatus> {
+  return http.get<NasiyaBotStatus>('/nasiya/bot-status');
 }
 
 export function processNasiyaReports(since: ISODate | null): Promise<NasiyaProcessResult> {

@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.importers.nasiya_workbook import MAX_BYTES, looks_like_xlsx
 from app.models import NasiyaIntake, TelegramGroupMessage
-from app.schemas import NasiyaRescanOut
+from app.schemas import NasiyaBotGroup, NasiyaBotStatus, NasiyaRescanOut
 from app.services import nasiya_reports
 from app.services.reports import today
 
@@ -112,3 +112,60 @@ async def rescan(session: AsyncSession, download: Download, *, since: date | Non
         select(func.count()).select_from(_unhandled(since).subquery()))).scalar_one())
     return NasiyaRescanOut(checked=checked, created=created, skipped=skipped, failed=failed, remaining=remaining,
                            confirmed=confirmed)
+
+
+async def bot_status(session: AsyncSession, bot) -> NasiyaBotStatus:
+    """Why group files do or do not arrive: what Telegram says about the bot and what the database has stored.
+
+    Telegram delivers ordinary group messages (documents included) only when the bot's privacy mode is off or the
+    bot is an administrator of the group; otherwise it sees commands only. A bot cannot fetch earlier messages."""
+    from app.bot.group_log import allowed_group_ids
+
+    problems: list[str] = []
+    me = await bot.get_me()
+    webhook = await bot.get_webhook_info()
+    stored = (await session.execute(
+        select(TelegramGroupMessage.chat_id, func.max(TelegramGroupMessage.chat_title), func.count(),
+               func.count().filter(func.lower(TelegramGroupMessage.file_name).like("%.xls_")),
+               func.max(TelegramGroupMessage.sent_at))
+        .group_by(TelegramGroupMessage.chat_id))).all()
+    groups = {chat_id: NasiyaBotGroup(chat_id=chat_id, title=title or "", messages=n, excel_files=x, last_message_at=last)
+              for chat_id, title, n, x, last in stored}
+    for chat_id in nasiya_chat_ids() | allowed_group_ids():
+        groups.setdefault(chat_id, NasiyaBotGroup(chat_id=chat_id, title="", messages=0, excel_files=0,
+                                                  last_message_at=None))
+    for group in groups.values():
+        try:
+            member = await bot.get_chat_member(group.chat_id, me.id)
+            group.bot_status = getattr(member.status, "value", str(member.status))
+            if not group.title:
+                group.title = (await bot.get_chat(group.chat_id)).title or ""
+        except Exception as exc:  # the bot was removed, or the id is wrong
+            group.bot_status = "unknown"
+            group.error = str(exc)[:200]
+
+    if not webhook.url:
+        problems.append("Bot webhook o'rnatilmagan: Telegram botga hech narsa yubormayapti.")
+    elif webhook.last_error_message:
+        problems.append(f"Telegram botga yetkaza olmayapti: {webhook.last_error_message}")
+    if webhook.url and webhook.allowed_updates and "message" not in webhook.allowed_updates:
+        problems.append("Webhook guruh xabarlarini qabul qilmaydi (allowed_updates).")
+    nasiya_groups = [g for g in groups.values() if not nasiya_chat_ids() or g.chat_id in nasiya_chat_ids()]
+    if not nasiya_groups:
+        problems.append("Bot hali birorta guruhdan xabar olmagan.")
+    for g in nasiya_groups:
+        name = g.title or str(g.chat_id)
+        if g.bot_status in ("left", "kicked"):
+            problems.append(f"«{name}»: bot guruhda emas — botni guruhga qo'shing.")
+        elif g.excel_files:
+            continue
+        elif not me.can_read_all_group_messages and g.bot_status != "administrator":
+            problems.append(f"«{name}»: bot faqat buyruqlarni ko'radi (privacy yoqilgan, bot admin emas) — "
+                            "fayllar kelmaydi. Botni shu guruhda administrator qiling.")
+        elif g.excel_files == 0:
+            problems.append(f"«{name}»: bot ulangandan beri guruhga Excel fayl tashlanmagan.")
+    return NasiyaBotStatus(
+        bot_username=me.username or "", can_read_all_group_messages=bool(me.can_read_all_group_messages),
+        webhook_set=bool(webhook.url), webhook_error=webhook.last_error_message,
+        pending_updates=webhook.pending_update_count, nasiya_chat_ids=sorted(nasiya_chat_ids()),
+        groups=sorted(groups.values(), key=lambda g: g.title), problems=problems)

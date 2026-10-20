@@ -879,6 +879,27 @@ class NasiyaRescanOut(BaseModel):
     confirmed: int = 0  # new reports confirmed automatically (nasiya_reports.auto_confirm)
 
 
+class NasiyaBotGroup(BaseModel):
+    chat_id: int
+    title: str
+    messages: int  # stored by the bot (SPEC §14)
+    excel_files: int
+    last_message_at: datetime | None
+    bot_status: str = ""  # Telegram chat member status: administrator, member, left, kicked; 'unknown' on error
+    error: str | None = None
+
+
+class NasiyaBotStatus(BaseModel):
+    bot_username: str
+    can_read_all_group_messages: bool  # privacy mode off
+    webhook_set: bool
+    webhook_error: str | None
+    pending_updates: int
+    nasiya_chat_ids: list[int]
+    groups: list[NasiyaBotGroup]
+    problems: list[str]  # plain-language reasons files do not arrive; empty = fine
+
+
 class NasiyaProcessIn(BaseModel):
     since: date | None = None
 

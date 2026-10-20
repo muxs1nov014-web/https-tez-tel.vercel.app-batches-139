@@ -338,3 +338,45 @@ async def test_a_clean_group_file_of_known_customers_is_confirmed_automatically(
     assert (result.checked, result.created, result.confirmed, result.remaining) == (1, 1, 0, 0)  # 1 error: waits
     statuses = dict((await session.execute(select(NasiyaReport.report_date, NasiyaReport.status))).all())
     assert {d.isoformat(): s for d, s in statuses.items()} == {"2026-10-15": "confirmed", "2026-10-16": "pending"}
+
+
+class _FakeBot:
+    """Answers the read calls bot_status makes."""
+
+    def __init__(self, *, privacy_off: bool, member_status: str, webhook_url: str = "https://x/api/telegram/webhook"):
+        from types import SimpleNamespace as NS
+
+        self._me = NS(id=42, username="teztel_bot", can_read_all_group_messages=privacy_off)
+        self._webhook = NS(url=webhook_url, last_error_message=None, pending_update_count=0,
+                           allowed_updates=["message", "edited_message"])
+        self._member = NS(status=member_status)
+        self._chat = NS(title="Telefon nasiya nazirat")
+
+    async def get_me(self):
+        return self._me
+
+    async def get_webhook_info(self):
+        return self._webhook
+
+    async def get_chat_member(self, chat_id, user_id):
+        return self._member
+
+    async def get_chat(self, chat_id):
+        return self._chat
+
+
+async def test_bot_status_explains_why_group_files_do_not_arrive(session, monkeypatch):
+    monkeypatch.setattr(nasiya_telegram, "nasiya_chat_ids", lambda: {-1003839931967})
+    status = await nasiya_telegram.bot_status(session, _FakeBot(privacy_off=False, member_status="member"))
+    assert [g.title for g in status.groups] == ["Telefon nasiya nazirat"] and status.groups[0].messages == 0
+    assert len(status.problems) == 1 and "administrator qiling" in status.problems[0]
+
+    status = await nasiya_telegram.bot_status(session, _FakeBot(privacy_off=False, member_status="administrator"))
+    assert status.problems == ["«Telefon nasiya nazirat»: bot ulangandan beri guruhga Excel fayl tashlanmagan."]
+
+    await _group_message(session, 1, "nazorat_15.10.2026.xlsx")
+    status = await nasiya_telegram.bot_status(session, _FakeBot(privacy_off=False, member_status="member"))
+    assert status.problems == [] and status.groups[0].excel_files == 1  # files do arrive
+
+    status = await nasiya_telegram.bot_status(session, _FakeBot(privacy_off=True, member_status="left", webhook_url=""))
+    assert status.problems[0].startswith("Bot webhook o'rnatilmagan") and "guruhda emas" in status.problems[1]

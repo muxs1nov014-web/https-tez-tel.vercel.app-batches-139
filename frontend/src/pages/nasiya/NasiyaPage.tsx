@@ -42,7 +42,7 @@ import {
   type Series,
 } from '../dashboard/chartKit';
 import { MonthsCard } from './MonthsCard';
-import { ProcessButton } from './ProcessButton';
+import { ProcessButton, RefreshButton } from './ProcessButton';
 import { EVENT_HINTS, EVENT_LABELS, ImeiSearch, ImeiTrailModal, StatusBadge } from './shared';
 
 type TabKey = 'overview' | 'reports';
@@ -64,6 +64,7 @@ export function NasiyaPage() {
         subtitle="«Telefon nasiya nazorat» guruhidagi kunlik Excel: har bir telefon IMEI bo'yicha. Fayl avval tekshiriladi, tasdiqlangan kunlar nazoratga kiradi."
         actions={
           <Can do="nasiya.review">
+            <RefreshButton />
             <ProcessButton />
             <UploadButton />
           </Can>

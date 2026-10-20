@@ -13,6 +13,7 @@ from app.core.errors import Forbidden, ValidationFailed
 from app.importers.nasiya_workbook import MAX_BYTES
 from app.models import User
 from app.schemas import (
+    NasiyaBotStatus,
     NasiyaConfirmIn,
     NasiyaCustomerDetail,
     NasiyaImeiTrailRow,
@@ -107,6 +108,20 @@ async def rescan(since: date | None = None, session: AsyncSession = Depends(get_
         await bot.session.close()
     await session.commit()
     return result
+
+
+@router.get("/bot-status", response_model=NasiyaBotStatus, dependencies=[Depends(operator)])
+async def bot_status(session: AsyncSession = Depends(get_session)):
+    """Why group files do or do not arrive (privacy mode, membership, webhook, what is stored)."""
+    if not get_settings().telegram_bot_token:
+        raise ValidationFailed("Bot sozlanmagan (TELEGRAM_BOT_TOKEN yo'q)")
+    from app.bot import webhook  # aiogram loads only when needed
+
+    bot = webhook.make_bot()
+    try:
+        return await nasiya_telegram.bot_status(session, bot)
+    finally:
+        await bot.session.close()
 
 
 @router.post("/reports/process", response_model=NasiyaProcessOut)
