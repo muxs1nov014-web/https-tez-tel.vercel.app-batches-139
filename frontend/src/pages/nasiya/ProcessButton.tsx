@@ -210,7 +210,7 @@ function ProcessModal({ onClose }: { onClose: () => void }) {
         </Field>
         <ul className="list-disc space-y-1 pl-5 text-[13px] text-slate-600">
           <li>Bir kunga bir nechta fayl bo'lsa, eng oxirgisi olinadi.</li>
-          <li>Varaq nomi mijoz nomiga aniq mos kelsa, o'zi bog'lanadi; mos kelmasa, kun kutib turadi.</li>
+          <li>Varaq nomi mijoz nomiga aniq mos kelsa, o'zi bog'lanadi; mos kelmasa, shu nomda yangi mijoz ochiladi.</li>
           <li>
             {isAdmin
               ? 'Xatosi bor fayllar ham hisoblanadi; xatolar hisobot sahifasida qoladi.'

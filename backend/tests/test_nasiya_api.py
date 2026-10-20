@@ -253,10 +253,10 @@ async def test_telegram_documents_are_ingested_and_rescanned_once(session, monke
         return files[file_id]
 
     row = await _group_message(session, 1, "nazorat_15.10.2026.xlsx")
-    assert await nasiya_telegram.ingest_message(session, row, download) == "created"
+    assert await nasiya_telegram.ingest_message(session, row, download) == "confirmed"  # counted on arrival
     report = (await session.execute(select(NasiyaReport).where(NasiyaReport.telegram_message_id == row.id))).scalar_one()
     assert (report.status, report.source, report.report_date.isoformat(), report.sent_by, report.chat_title) == (
-        "pending", "telegram", "2026-10-15", "Ali", "Telefon nasiya nazirat")
+        "confirmed", "telegram", "2026-10-15", "Ali", "Telefon nasiya nazirat")
     assert await nasiya_telegram.ingest_message(session, row, download) is None  # handled once
     await _group_message(session, 2, "boshqa.xlsx")
     await _group_message(session, 3, "copy.xlsx")  # the same workbook sent again
@@ -319,7 +319,7 @@ async def test_process_confirms_every_day_from_a_date(client, operator_h, admin_
     assert ali["id"] != vali["id"]
 
 
-async def test_a_group_file_of_known_customers_is_counted_on_arrival(session):
+async def test_a_group_file_is_counted_on_arrival(session):
     from app.models import Customer
 
     session.add_all([Customer(name="Ali aka", kind="dealer"), Customer(name="Vali aka", kind="dealer")])
@@ -336,12 +336,15 @@ async def test_a_group_file_of_known_customers_is_counted_on_arrival(session):
     result = await nasiya_telegram.rescan(session, download, since=datetime(2026, 10, 14).date(), limit=1)
     assert (result.checked, result.created, result.confirmed, result.remaining) == (1, 1, 1, 2)
     result = await nasiya_telegram.rescan(session, download, since=datetime(2026, 10, 14).date())
-    assert (result.checked, result.created, result.confirmed, result.remaining) == (2, 2, 1, 0)
+    assert (result.checked, result.created, result.confirmed, result.remaining) == (2, 2, 2, 0)
     reports = {r.report_date.isoformat(): r for r in (await session.execute(select(NasiyaReport))).scalars()}
     assert {d: r.status for d, r in reports.items()} == {
-        "2026-10-15": "confirmed", "2026-10-16": "confirmed", "2026-10-17": "pending"}  # no customer matches
+        "2026-10-15": "confirmed", "2026-10-16": "confirmed", "2026-10-17": "confirmed"}
     assert (reports["2026-10-15"].review_note, reports["2026-10-16"].review_note) == (
         "Avtomatik: xatosiz", "Avtomatik: 1 ta xato bilan")
+    # a sheet that matches no customer gets one named after it, so the day is not held back
+    new = (await session.execute(select(Customer).where(Customer.name == "Yangi odam"))).scalar_one()
+    assert new.note == "Nasiya Excel varag'idan avtomatik yaratildi"
 
 
 async def test_daily_cron_needs_the_secret_and_counts_pending_days(client, operator_h, monkeypatch):

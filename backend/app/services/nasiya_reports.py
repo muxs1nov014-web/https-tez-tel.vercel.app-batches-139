@@ -249,10 +249,16 @@ def _unlinked_with_phones(report_id: int):
         select(NasiyaItem.id).where(NasiyaItem.sheet_id == NasiyaSheet.id).exists()).order_by(NasiyaSheet.position)
 
 
-async def auto_link(session: AsyncSession, report_id: int, user_id: int | None) -> list[str]:
+AUTO_CUSTOMER_NOTE = "Nasiya Excel varag'idan avtomatik yaratildi"
+
+
+async def auto_link(session: AsyncSession, report_id: int, user_id: int | None, *,
+                    create_missing: bool = False) -> list[str]:
     """Link each unlinked sheet that has phones to the customer suggest_customer clearly matches, and remember it.
 
-    Returns 'sheet → customer' lines. A sheet without a clear match stays for the operator."""
+    With create_missing (the unattended paths: auto_confirm, process_pending), a sheet that matches no customer gets
+    a new dealer named after it, so the day is never held back; an operator can relink the sheet later (the link is
+    by sheet name, every report follows). Returns 'sheet → customer' lines."""
     sheets = list((await session.execute(_unlinked_with_phones(report_id))).scalars())
     if not sheets:
         return []
@@ -262,11 +268,18 @@ async def auto_link(session: AsyncSession, report_id: int, user_id: int | None) 
     linked = []
     for sheet in sheets:
         customer = suggest_customer(sheet.name, customers, taken)
+        created = False
         if customer is None:
-            continue
+            if not create_missing:
+                continue
+            customer = Customer(name=" ".join(sheet.name.split())[:128], kind="dealer", note=AUTO_CUSTOMER_NOTE)
+            session.add(customer)
+            await session.flush()
+            customers.append(customer)
+            created = True
         await link_sheet(session, report_id, sheet.id, customer.id, user_id)
         taken.add(customer.id)
-        linked.append(f"{sheet.name} → {customer.name}")
+        linked.append(f"{sheet.name} → {customer.name}" + (" (yangi mijoz)" if created else ""))
     return linked
 
 
@@ -328,14 +341,14 @@ async def _newer_confirmed(session: AsyncSession, report: NasiyaReport) -> bool:
 
 async def auto_confirm(session: AsyncSession, report: NasiyaReport) -> bool:
     """A group file is counted as soon as it arrives when it has a date, every sheet with phones belongs to a
-    customer (remembered or clearly matching by name) and no later file for that day is confirmed. A file with
-    errors is counted too, with a note: the errors stay on the report and the panel flags the day. A sheet that
-    matches no customer is the one thing that waits for an operator."""
+    customer (remembered, clearly matching by name, or created for it) and no later file for that day is
+    confirmed. A file with errors is counted too, with a note: the errors stay on the report and the panel flags
+    the day."""
     if report.status != "pending" or report.report_date is None:
         return False
     if await _newer_confirmed(session, report):
         return False
-    await auto_link(session, report.id, None)
+    await auto_link(session, report.id, None, create_missing=True)
     if (await session.execute(_unlinked_with_phones(report.id).limit(1))).first() is not None:
         return False
     note = f"Avtomatik: {report.error_count} ta xato bilan" if report.error_count else "Avtomatik: xatosiz"
@@ -348,8 +361,9 @@ async def process_pending(session: AsyncSession, user_id: int | None, *, since: 
     """Confirm every pending day from `since` on (SPEC §18.3, "Hammasini hisoblash").
 
     Per day the latest file wins; earlier files of that day become 'superseded'. Sheets are linked by remembered
-    or clearly matching names. A day with unlinked sheets waits; a day with errors waits unless an administrator
-    runs this (allow_errors): it is then confirmed with a note and its errors stay listed on the report."""
+    or clearly matching names, or get a new customer named after them. A day with errors waits unless an
+    administrator (or the daily catch-up) runs this (allow_errors): it is then confirmed with a note and its errors
+    stay listed on the report."""
     stmt = (select(NasiyaReport).where(NasiyaReport.status == "pending", NasiyaReport.report_date.is_not(None))
             .order_by(NasiyaReport.report_date, NasiyaReport.id))
     if since is not None:
@@ -370,7 +384,7 @@ async def process_pending(session: AsyncSession, user_id: int | None, *, since: 
             out.superseded += 1
         if latest is None:
             continue
-        out.linked.extend(await auto_link(session, latest.id, user_id))
+        out.linked.extend(await auto_link(session, latest.id, user_id, create_missing=True))
         unlinked = [s.name for s in (await session.execute(_unlinked_with_phones(latest.id))).scalars()]
         reason = None
         if unlinked:

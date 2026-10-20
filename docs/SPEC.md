@@ -557,7 +557,10 @@ panel and then monitored day to day.
 - A new group file is confirmed on arrival (`auto_confirm`) when it has a date, every sheet with phones is linked
   (remembered, or a clear name match as below) and no later file for that day is confirmed. A file with errors is
   confirmed too, noted "Avtomatik: N ta xato bilan"; the errors stay on the report and the daily view and the
-  Dashboard flag the day. Only a sheet that matches no customer keeps the file waiting in the review queue.
+  Dashboard flag the day. A sheet that matches no customer gets a new dealer named after it (note "Nasiya Excel
+  varag'idan avtomatik yaratildi"), so no day is held back; relinking the sheet later moves every report.
+- `python -m app.cli nasiya-import <folder|files>` (workstation, `DATABASE_URL_UNPOOLED` = Neon): saved workbooks
+  (e.g. a Telegram export) become upload reports, oldest file first, then every pending day is counted as above.
 - Private chat (`app/bot/nasiya_upload.py`): an `.xlsx` sent or forwarded to the bot by a panel operator or admin
   (`users.telegram_id`) is ingested as an upload (date fallback: the forward's original date), counted by
   `auto_confirm`, and answered with the day, per-kind totals, the errors with cells and the outcome. Needed because

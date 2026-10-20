@@ -5,6 +5,7 @@
     python -m app.cli import-excel <file> [--commit]
     python -m app.cli set-webhook <https://api-host>    # bot in webhook mode (Vercel, SPEC §16)
     python -m app.cli delete-webhook                   # back to long polling
+    python -m app.cli nasiya-import <folder|file.xlsx>... # daily nasiya workbooks → reports, then count them (§18)
 """
 
 import asyncio
@@ -91,6 +92,35 @@ async def delete_webhook() -> None:
     print("webhook deleted: run the polling bot (python -m app.bot.main)")
 
 
+async def nasiya_import(paths: list[str]) -> None:
+    """Workbooks saved from the group (e.g. a Telegram export): each becomes a report like a panel upload, oldest
+    file first, then every pending day is counted as the daily catch-up does (errors noted, unlinked sheets wait)."""
+    from pathlib import Path
+
+    from app.core.errors import ValidationFailed
+    from app.services import nasiya_reports
+
+    files = sorted({f for p in map(Path, paths) for f in ([p] if p.is_file() else p.glob("*.xls*"))},
+                   key=lambda f: (f.stat().st_mtime, f.name))
+    async with SessionLocal() as session:
+        for f in files:
+            try:
+                report, created = await nasiya_reports.ingest(session, f.read_bytes(), file_name=f.name,
+                                                              source="upload", sent_by="CLI")
+            except ValidationFailed as exc:
+                print(f"  {f.name}: {exc.detail}")
+                continue
+            print(f"  {f.name}: {report.report_date} — {'yangi' if created else 'avval yuklangan'}, "
+                  f"{report.item_count} dona, {report.error_count} xato")
+        out = await nasiya_reports.process_pending(session, None, since=None, allow_errors=True)
+        await session.commit()
+    print(f"hisoblandi: {out.confirmed} kun, almashtirildi: {out.superseded}")
+    for line in out.linked:
+        print(f"  bog'landi: {line}")
+    for w in out.waiting:
+        print(f"  kutmoqda {w.report_date}: {w.reason}")
+
+
 def main() -> None:
     args = sys.argv[1:]
     if not args:
@@ -106,6 +136,8 @@ def main() -> None:
         asyncio.run(set_webhook(args[1]))
     elif args[0] == "delete-webhook":
         asyncio.run(delete_webhook())
+    elif args[0] == "nasiya-import" and len(args) >= 2:
+        asyncio.run(nasiya_import(args[1:]))
     else:
         print(__doc__)
         sys.exit(1)
