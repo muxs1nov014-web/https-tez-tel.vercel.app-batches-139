@@ -9,7 +9,7 @@ import { SearchField } from '../../components/ui/SearchField';
 import { EmptyState, QueryView } from '../../components/ui/States';
 import { Tabs } from '../../components/ui/Tabs';
 import { fmtDate, fmtQty, fmtUsd, toNum } from '../../lib/format';
-import { AgeBadge, ImeiTrailModal, KindBadge } from './shared';
+import { AgeBadge, debtAgeClass, ImeiTrailModal, KindBadge } from './shared';
 
 type GroupKey = 'all' | NasiyaPhoneGroup;
 const GROUPS: { key: GroupKey; label: string }[] = [
@@ -95,6 +95,12 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
         </span>
         <span>7 kundan ko'p: <span className="font-medium text-warning-700">{fmtQty(over(7))}</span></span>
         <span>30 kundan ko'p: <span className="font-medium text-danger-600">{fmtQty(over(30))}</span></span>
+        <span className="flex items-center gap-1.5">
+          Nasiya:
+          <span className={`rounded-full px-1.5 text-[11px] ${debtAgeClass(0)}`}>2 kungacha</span>
+          <span className={`rounded-full px-1.5 text-[11px] ${debtAgeClass(3)}`}>3–4 kun</span>
+          <span className={`rounded-full px-1.5 text-[11px] ${debtAgeClass(5)}`}>5 kundan</span>
+        </span>
       </div>
       {filtered.length === 0 ? (
         <EmptyState title="Topilmadi" />
@@ -117,7 +123,7 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
               {filtered.slice(0, limit).map((r, i) => (
                 <tr key={`${r.imei ?? r.model}-${i}`}>
                   <td>
-                    <AgeBadge days={r.age_days} exact={r.since_exact} overdue={r.overdue} />
+                    <AgeBadge days={r.age_days} exact={r.since_exact} overdue={r.overdue} kind={r.kind} />
                   </td>
                   <td className="whitespace-nowrap text-slate-500">{r.since ? fmtDate(r.since) : '—'}</td>
                   <td className="whitespace-nowrap">

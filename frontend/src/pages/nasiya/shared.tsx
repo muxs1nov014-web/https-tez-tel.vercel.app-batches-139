@@ -85,16 +85,43 @@ export function IssueLevel({ issue }: { issue: NasiyaIssue }) {
   return issue.level === 'error' ? <Badge tone="danger">Xato</Badge> : <Badge tone="warning">Diqqat</Badge>;
 }
 
-/** Days in the current state: amber from a week, red past the term (or a month). */
-export function AgeBadge({ days, exact, overdue }: { days: number | null; exact: boolean; overdue: boolean }) {
+/** Colour of a phone's days in nasiya: yellow up to 2 days, light red up to 5, dark red from 5. */
+export function debtAgeClass(days: number): string {
+  if (days >= 5) return 'bg-danger-700 text-white';
+  if (days > 2) return 'bg-danger-200 text-danger-800';
+  return 'bg-yellow-300 text-yellow-950';
+}
+
+/** Days in the current state. Nasiya (and variant) by the 2/5-day scale; qoldiq amber from a week, red past a month. */
+export function AgeBadge({
+  days,
+  exact,
+  overdue,
+  kind,
+}: {
+  days: number | null;
+  exact: boolean;
+  overdue: boolean;
+  kind?: NasiyaKind;
+}) {
   if (days === null) return <span className="text-slate-300">—</span>;
+  const label = `${exact ? '' : '≥ '}${days} kun`;
+  const title = exact ? undefined : "Birinchi tasdiqlangan kundan beri: haqiqiy muddat bundan uzoq bo'lishi mumkin";
+  if (kind === 'nasiya' || kind === 'variant') {
+    return (
+      <span title={title}>
+        <span
+          className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-[3px] text-[11.5px] font-medium leading-none ${debtAgeClass(days)}`}
+        >
+          {label}
+        </span>
+      </span>
+    );
+  }
   const tone: Tone = overdue || days > 30 ? 'danger' : days > 7 ? 'warning' : 'slate';
   return (
-    <span title={exact ? undefined : "Birinchi tasdiqlangan kundan beri: haqiqiy muddat bundan uzoq bo'lishi mumkin"}>
-      <Badge tone={tone}>
-        {exact ? '' : '≥ '}
-        {days} kun
-      </Badge>
+    <span title={title}>
+      <Badge tone={tone}>{label}</Badge>
     </span>
   );
 }

@@ -79,6 +79,11 @@ async def summary_text(session, report: NasiyaReport, counted: bool, duplicate: 
     return "\n".join(lines)
 
 
+def _debt_mark(days: int) -> str:
+    """The panel's nasiya colours: yellow up to 2 days, light red up to 5, dark red from 5."""
+    return "🔴" if days >= 5 else "🟠" if days > 2 else "🟡"
+
+
 async def _oldest_lines(session, report: NasiyaReport) -> list[str]:
     """The phones that have been longest in nasiya and in qoldiq on this day ("≥" when history starts there)."""
     lines = []
@@ -93,7 +98,7 @@ async def _oldest_lines(session, report: NasiyaReport) -> list[str]:
         for p in rows:
             days = f"{'' if p.since_exact else '≥'}{p.age_days} kun"
             who = p.customer.name if p.customer else p.sheet_name
-            lines.append(f"– {days} · {who} · {p.model} · {p.imei or '—'}")
+            lines.append(f"{_debt_mark(p.age_days) if group == 'debt' else '–'} {days} · {who} · {p.model} · {p.imei or '—'}")
     if lines:
         lines.append("Hammasi: Panel → Nasiya nazorati → Telefonlar.")
     return lines

@@ -40,7 +40,7 @@ from app.services.nasiya_reports import customer_ref
 
 ZERO = Decimal(0)
 DEBT_KINDS = ("nasiya", "variant")
-AGING = ((0, 3, "0–3 kun"), (4, 7, "4–7 kun"), (8, 14, "8–14 kun"), (15, 30, "15–30 kun"), (31, None, "30+ kun"))
+AGING = ((1, 3, "1–3 kun"), (4, 7, "4–7 kun"), (8, 14, "8–14 kun"), (15, 30, "15–30 kun"), (31, None, "30+ kun"))
 ALERT_TYPES = {"vanished_debt", "vanished_qoldiq", "debt_to_qoldiq", "moved", "price_changed", "reopened"}
 EVENT_ORDER = ("vanished_debt", "vanished_qoldiq", "moved", "price_changed", "debt_to_qoldiq", "reopened",
                "paid", "sold_paid", "sold_direct", "qoldiq_to_debt", "new_debt", "handover")
@@ -272,7 +272,8 @@ def _totals(rows: list[Row], qoldiq_value: Decimal, ages: dict[str, int]) -> Nas
 
 
 def _ages(report: NasiyaReport, since: dict[str, Since]) -> dict[str, int]:
-    return {imei: (report.report_date - s.since).days for imei, s in since.items() if s.since}
+    """Days counted the way people count them: the day the phone appeared is day 1 (in on 13.10 → 3 days on 15.10)."""
+    return {imei: (report.report_date - s.since).days + 1 for imei, s in since.items() if s.since}
 
 
 @dataclass

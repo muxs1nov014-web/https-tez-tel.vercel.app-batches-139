@@ -176,7 +176,7 @@ async def test_overview_after_two_confirmed_days(client, operator_h, viewer_h):
         2850, 2390, 1500, 2)
     assert ali["panel_debt_usd"] == 0  # nothing in the panel ledger: the difference is visible
     # imei 3 has been in Ali's debt for both confirmed days; ages start at the first confirmed day (lower bound)
-    assert ali["max_age_days"] == 1
+    assert ali["max_age_days"] == 2
     assert [b["qty"] for b in o["aging"]] == [3, 0, 0, 0, 0]
 
 
@@ -189,11 +189,11 @@ async def test_customer_detail_lists_every_phone_with_model_and_age(client, oper
     rows = [(i["kind"], i["model"], i["imei"], i["price_usd"], i["since"], i["since_exact"], i["age_days"])
             for i in c["items"]]
     assert rows == [
-        ("nasiya", "13 black 128", imei(3), 460, "2026-10-14", False, 1),
-        ("nasiya", "16 black 128", imei(4), 790, "2026-10-15", True, 0),
-        ("nasiya", "18 pro 256", imei(8), 1600, "2026-10-15", True, 0),
-        ("qoldiq", "16 black 128", imei(5), None, "2026-10-14", False, 1),
-        ("qoldiq", "15 blue 128", imei(7), None, "2026-10-15", True, 0),
+        ("nasiya", "13 black 128", imei(3), 460, "2026-10-14", False, 2),
+        ("nasiya", "16 black 128", imei(4), 790, "2026-10-15", True, 1),
+        ("nasiya", "18 pro 256", imei(8), 1600, "2026-10-15", True, 1),
+        ("qoldiq", "16 black 128", imei(5), None, "2026-10-14", False, 2),
+        ("qoldiq", "15 blue 128", imei(7), None, "2026-10-15", True, 1),
         ("sotuv", "17 max 256", imei(1), 1500, None, False, None),
     ]
     assert [(m["kind"], m["model"], m["qty"], m["amount"]) for m in c["models"]] == [
@@ -417,10 +417,10 @@ async def test_phones_lists_every_nasiya_and_qoldiq_imei_with_its_days(client, o
     assert set(by_imei) == {imei(3), imei(4), imei(8), imei(5), imei(7), imei(6)}  # no sotuv by default
     # imei 3: nasiya at Ali since the first day (a lower bound); imei 8: new today; imei 5: qoldiq since day 1
     assert (by_imei[imei(3)]["age_days"], by_imei[imei(3)]["since"], by_imei[imei(3)]["since_exact"]) == (
-        1, "2026-10-14", False)
+        2, "2026-10-14", False)
     assert (by_imei[imei(8)]["age_days"], by_imei[imei(8)]["since_exact"], by_imei[imei(8)]["customer"]["name"]) == (
-        0, True, "Ali aka")
-    assert by_imei[imei(5)]["kind"] == "qoldiq" and by_imei[imei(5)]["age_days"] == 1
+        1, True, "Ali aka")
+    assert by_imei[imei(5)]["kind"] == "qoldiq" and by_imei[imei(5)]["age_days"] == 2
     ages = [p["age_days"] for p in data["rows"]]
     assert ages == sorted(ages, reverse=True)  # oldest first
     qoldiq = (await client.get(f"/api/nasiya/phones?group=qoldiq&customer_id={customers['Vali aka']}",

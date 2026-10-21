@@ -243,7 +243,7 @@ function CustomerView({ data }: { data: NasiyaCustomerDetail }) {
                         </td>
                         <td className="whitespace-nowrap">{i.since ? `${i.since_exact ? '' : '≤ '}${fmtDate(i.since)}` : '—'}</td>
                         <td className="num">
-                          <AgeBadge days={i.age_days} exact={i.since_exact} overdue={i.overdue} />
+                          <AgeBadge days={i.age_days} exact={i.since_exact} overdue={i.overdue} kind={i.kind} />
                         </td>
                         <td className="num">{i.term_days ? `${i.term_days} kun` : '—'}</td>
                       </tr>

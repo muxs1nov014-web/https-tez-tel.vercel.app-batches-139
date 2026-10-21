@@ -44,7 +44,7 @@ import {
 import { MonthsCard } from './MonthsCard';
 import { NasiyaPhonesView } from './NasiyaPhonesView';
 import { ProcessButton, RefreshButton } from './ProcessButton';
-import { EVENT_HINTS, EVENT_LABELS, ImeiSearch, ImeiTrailModal, StatusBadge } from './shared';
+import { AgeBadge, EVENT_HINTS, EVENT_LABELS, ImeiSearch, ImeiTrailModal, StatusBadge } from './shared';
 
 type TabKey = 'overview' | 'phones' | 'reports';
 const TABS: { key: TabKey; label: string }[] = [
@@ -447,7 +447,9 @@ function CustomersCard({ rows }: { rows: NasiyaCustomerRow[] }) {
                     <td className={`num ${r.over_limit ? 'font-semibold text-danger-600' : ''}`}>
                       {fmtUsd(r.available_usd, { decimals: 0 })}
                     </td>
-                    <td className="num">{r.max_age_days === null ? '—' : `${r.max_age_days} kun`}</td>
+                    <td className="num">
+                      <AgeBadge days={r.max_age_days} exact overdue={false} kind="nasiya" />
+                    </td>
                     <td className="num text-slate-500">{fmtUsd(r.panel_debt_usd)}</td>
                     <td className="whitespace-nowrap">
                       {r.alert_count > 0 && <Badge tone="danger">{r.alert_count} ogoh.</Badge>}{' '}
