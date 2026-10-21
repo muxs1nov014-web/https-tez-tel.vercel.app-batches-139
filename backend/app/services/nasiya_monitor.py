@@ -28,6 +28,8 @@ from app.schemas import (
     NasiyaModelRow,
     NasiyaMonthRow,
     NasiyaOverviewOut,
+    NasiyaPhoneRow,
+    NasiyaPhonesOut,
     NasiyaSeriesPoint,
     NasiyaTotals,
 )
@@ -396,6 +398,37 @@ async def series(session: AsyncSession, days: int = 90, customer_id: int | None 
             for rid, d, debt, debt_qty, q_qty, s_usd, s_qty in (await session.execute(stmt)).all()]
 
 
+PHONE_GROUPS = {"debt": DEBT_KINDS, "qoldiq": ("qoldiq",), "sotuv": ("sotuv",)}
+
+
+def _phone_item(day: "_Day", r: Row) -> dict:
+    s = day.since.get(r.imei) if r.imei else None
+    age = day.ages.get(r.imei) if r.imei else None
+    return dict(kind=r.kind, model=r.model, imei=r.imei, qty=r.qty, price_usd=r.price,
+                since=s.since if s else None, since_exact=s.exact if s else False, age_days=age, term_days=r.term_days,
+                overdue=r.kind in DEBT_KINDS and r.term_days is not None and age is not None and age > r.term_days,
+                marked_date=r.marked_date)
+
+
+async def phones(session: AsyncSession, group: str | None = None, customer_id: int | None = None,
+                 on: date | None = None) -> NasiyaPhonesOut:
+    """Every phone of the latest confirmed day (nasiya + variant and qoldiq by default) with how long it has been in
+    that state at that customer, oldest first."""
+    report = await latest_confirmed(session, on)
+    if report is None:
+        return NasiyaPhonesOut(report=None, history_start=None, rows=[])
+    day = await _load_day(session, report)
+    kinds = PHONE_GROUPS[group] if group else DEBT_KINDS + ("qoldiq",)
+    rows = [r for r in day.rows if r.kind in kinds and (customer_id is None or r.customer_id == customer_id)]
+    customers = await _customers(session, [r.customer_id for r in rows])
+    out = [NasiyaPhoneRow(**_phone_item(day, r), customer=customer_ref(customers.get(r.customer_id)),
+                          sheet_name=r.sheet_name) for r in rows]
+    out.sort(key=lambda p: (-(p.age_days if p.age_days is not None else -1), p.customer.name if p.customer else "",
+                            p.model, p.imei or ""))
+    return NasiyaPhonesOut(report=(await nasiya_reports.summaries(session, [report]))[0],
+                           history_start=await _history_start(session), rows=out)
+
+
 async def customer_detail(session: AsyncSession, customer_id: int, on: date | None = None) -> NasiyaCustomerDetail:
     customer = await catalog.get_customer(session, customer_id)
     report = await latest_confirmed(session, on)
@@ -410,13 +443,7 @@ async def customer_detail(session: AsyncSession, customer_id: int, on: date | No
     mine = [r for r in day.rows if r.customer_id == customer_id]
     items = []
     for r in mine:
-        s = day.since.get(r.imei) if r.imei else None
-        age = day.ages.get(r.imei) if r.imei else None
-        items.append(NasiyaDebtItemOut(
-            kind=r.kind, model=r.model, imei=r.imei, qty=r.qty, price_usd=r.price, since=s.since if s else None,
-            since_exact=s.exact if s else False, age_days=age, term_days=r.term_days,
-            overdue=r.kind in DEBT_KINDS and r.term_days is not None and age is not None and age > r.term_days,
-            marked_date=r.marked_date))
+        items.append(NasiyaDebtItemOut(**_phone_item(day, r)))
     kind_order = {"nasiya": 0, "variant": 1, "qoldiq": 2, "sotuv": 3}
     items.sort(key=lambda i: (kind_order[i.kind], -(i.age_days or 0), i.model, i.imei or ""))
     models: dict[tuple[str, str], list] = {}

@@ -117,7 +117,9 @@ yangi nasiya, to'langan (Nasiya → Sotuv), qoldiqdan nasiyaga o'tgan telefonlar
 nasiyadan izsiz chiqqan (Sotuv'da ham yo'q), boshqa mijozga o'tgan, narxi o'zgargan, to'langan telefon qayta chiqqan.
 Mijozlar jadvalida: nasiya, varaqdagi o'z hisobi (farq bo'lsa qizil), qoldiq, limit va bo'sh limit, eng eski nasiya (kun).
 Mijoz nomini bossangiz — har bir telefon: model, IMEI, narx, qachondan va necha kundan beri turibdi.
-IMEI ni bossangiz — telefonning kunma-kun tarixi. **Oylar kesimida**: oyning sotuvi (Sotuv ustunidagi telefonlar,
+IMEI ni bossangiz — telefonning kunma-kun tarixi. **Telefonlar (kunlar)** bo'limi: hamma nasiya va qoldiq telefonlari
+mijozi, modeli, IMEI, narxi va necha kundan beri turgani bilan (eng uzog'i tepada); mijoz va IMEI bo'yicha qidirish bor.
+«≥» — telefon hisob boshlangan kundan oldin ham bo'lgan. **Oylar kesimida**: oyning sotuvi (Sotuv ustunidagi telefonlar,
 har biri bir marta), yangi nasiya, oy oxiridagi nasiya va qoldiq. Shu raqamlar **Mijozlar** ro'yxatida («Guruh: nasiya»
 ustuni), mijoz sahifasida («Guruh hisoboti») va Dashboard'da ham ko'rinadi. Guruhga bot o'chiq paytda tashlangan fayllar uchun
 **Hammasini hisoblash** ni bosing; boshqa joydan olingan faylni **Excel yuklash** bilan qo'shing.

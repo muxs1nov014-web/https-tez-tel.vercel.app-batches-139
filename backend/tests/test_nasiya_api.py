@@ -404,3 +404,25 @@ async def test_bot_status_explains_why_group_files_do_not_arrive(session, monkey
 
     status = await nasiya_telegram.bot_status(session, _FakeBot(privacy_off=True, member_status="left", webhook_url=""))
     assert status.problems[0].startswith("Bot webhook o'rnatilmagan") and "guruhda emas" in status.problems[1]
+
+
+async def test_phones_lists_every_nasiya_and_qoldiq_imei_with_its_days(client, operator_h, viewer_h):
+    customers, d1, d2 = await _setup_two_days(client, operator_h)
+    await _confirm(client, operator_h, d2["id"])
+    r = await client.get("/api/nasiya/phones", headers=viewer_h)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["report"]["report_date"] == "2026-10-15" and data["history_start"] == "2026-10-14"
+    by_imei = {p["imei"]: p for p in data["rows"]}
+    assert set(by_imei) == {imei(3), imei(4), imei(8), imei(5), imei(7), imei(6)}  # no sotuv by default
+    # imei 3: nasiya at Ali since the first day (a lower bound); imei 8: new today; imei 5: qoldiq since day 1
+    assert (by_imei[imei(3)]["age_days"], by_imei[imei(3)]["since"], by_imei[imei(3)]["since_exact"]) == (
+        1, "2026-10-14", False)
+    assert (by_imei[imei(8)]["age_days"], by_imei[imei(8)]["since_exact"], by_imei[imei(8)]["customer"]["name"]) == (
+        0, True, "Ali aka")
+    assert by_imei[imei(5)]["kind"] == "qoldiq" and by_imei[imei(5)]["age_days"] == 1
+    ages = [p["age_days"] for p in data["rows"]]
+    assert ages == sorted(ages, reverse=True)  # oldest first
+    qoldiq = (await client.get(f"/api/nasiya/phones?group=qoldiq&customer_id={customers['Vali aka']}",
+                               headers=viewer_h)).json()["rows"]
+    assert [p["imei"] for p in qoldiq] == [imei(6)]

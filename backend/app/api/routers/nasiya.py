@@ -3,6 +3,7 @@ confirming despite errors and deleting = admin."""
 
 import hmac
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Header, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,7 @@ from app.schemas import (
     NasiyaImeiTrailRow,
     NasiyaMonthRow,
     NasiyaOverviewOut,
+    NasiyaPhonesOut,
     NasiyaProcessIn,
     NasiyaProcessOut,
     NasiyaRejectIn,
@@ -46,6 +48,12 @@ async def overview(on: date | None = None, session: AsyncSession = Depends(get_s
 async def series(days: int = Query(90, ge=1, le=730), customer_id: int | None = None,
                  session: AsyncSession = Depends(get_session)):
     return await nasiya_monitor.series(session, days, customer_id)
+
+
+@router.get("/phones", response_model=NasiyaPhonesOut, dependencies=[Depends(viewer)])
+async def phones(group: Literal["debt", "qoldiq", "sotuv"] | None = None, customer_id: int | None = None,
+                 on: date | None = None, session: AsyncSession = Depends(get_session)):
+    return await nasiya_monitor.phones(session, group, customer_id, on)
 
 
 @router.get("/months", response_model=list[NasiyaMonthRow], dependencies=[Depends(viewer)])

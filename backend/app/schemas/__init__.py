@@ -1014,6 +1014,17 @@ class NasiyaDebtItemOut(BaseModel):
     marked_date: date | None
 
 
+class NasiyaPhoneRow(NasiyaDebtItemOut):
+    customer: CustomerRef | None
+    sheet_name: str
+
+
+class NasiyaPhonesOut(BaseModel):
+    report: "NasiyaReportSummary | None"
+    history_start: date | None  # first confirmed day: an age that reaches it is a lower bound
+    rows: list[NasiyaPhoneRow]  # oldest first
+
+
 class NasiyaModelRow(BaseModel):
     kind: NasiyaKind
     model: str

@@ -17,13 +17,14 @@ from app.core.db import SessionLocal
 from app.core.errors import ValidationFailed
 from app.importers.nasiya_workbook import MAX_BYTES, looks_like_xlsx
 from app.models import NasiyaItem, NasiyaReport, NasiyaSheet, User
-from app.services import nasiya_reports
+from app.services import nasiya_monitor, nasiya_reports
 from app.services.reports import today
 
 log = logging.getLogger(__name__)
 router = Router(name="nasiya_upload")
 REVIEW_ROLES = ("operator", "admin")
 MAX_ISSUES_SHOWN = 8
+OLDEST_SHOWN = 5
 
 
 async def _operator(session, telegram_id: int) -> User | None:
@@ -64,6 +65,7 @@ async def summary_text(session, report: NasiyaReport, counted: bool, duplicate: 
             lines.append(f"… yana {len(issues) - MAX_ISSUES_SHOWN} ta — panelda.")
     if report.status == "confirmed":
         lines.append("\n✅ Hisoblandi." if counted else "\n✅ Bu kun hisobga olingan.")
+        lines.extend(await _oldest_lines(session, report))
     elif report.status == "invalid":
         lines.append("\n❌ Bu nasiya fayli emas.")
     else:
@@ -75,6 +77,26 @@ async def summary_text(session, report: NasiyaReport, counted: bool, duplicate: 
         else:
             lines.append("\n⏳ Kutmoqda: shu kun uchun keyingi fayl allaqachon hisoblangan.")
     return "\n".join(lines)
+
+
+async def _oldest_lines(session, report: NasiyaReport) -> list[str]:
+    """The phones that have been longest in nasiya and in qoldiq on this day ("≥" when history starts there)."""
+    lines = []
+    for group, title in (("debt", "Eng uzoq nasiyada"), ("qoldiq", "Eng uzoq qoldiqda")):
+        data = await nasiya_monitor.phones(session, group, on=report.report_date)
+        if data.report is None or data.report.id != report.id:
+            return []
+        rows = [p for p in data.rows if p.age_days is not None][:OLDEST_SHOWN]
+        if not rows:
+            continue
+        lines.append(f"\n⏱ {title}:")
+        for p in rows:
+            days = f"{'' if p.since_exact else '≥'}{p.age_days} kun"
+            who = p.customer.name if p.customer else p.sheet_name
+            lines.append(f"– {days} · {who} · {p.model} · {p.imei or '—'}")
+    if lines:
+        lines.append("Hammasi: Panel → Nasiya nazorati → Telefonlar.")
+    return lines
 
 
 @router.message(F.document, lambda m: looks_like_xlsx(m.document.file_name))

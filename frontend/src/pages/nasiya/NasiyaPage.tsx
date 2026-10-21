@@ -42,18 +42,20 @@ import {
   type Series,
 } from '../dashboard/chartKit';
 import { MonthsCard } from './MonthsCard';
+import { NasiyaPhonesView } from './NasiyaPhonesView';
 import { ProcessButton, RefreshButton } from './ProcessButton';
 import { EVENT_HINTS, EVENT_LABELS, ImeiSearch, ImeiTrailModal, StatusBadge } from './shared';
 
-type TabKey = 'overview' | 'reports';
+type TabKey = 'overview' | 'phones' | 'reports';
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: 'Kunlik nazorat' },
+  { key: 'phones', label: 'Telefonlar (kunlar)' },
   { key: 'reports', label: 'Hisobotlar' },
 ];
 
 export function NasiyaPage() {
   const [params, setParams] = useSearchParams();
-  const tab: TabKey = params.get('tab') === 'reports' ? 'reports' : 'overview';
+  const tab: TabKey = TABS.find((t) => t.key === params.get('tab'))?.key ?? 'overview';
   const overview = useQuery({ queryKey: nasiyaKeys.overview(), queryFn: () => getNasiyaOverview() });
   const pending = overview.data?.pending_reports ?? 0;
 
@@ -75,11 +77,9 @@ export function NasiyaPage() {
         value={tab}
         onChange={(key) => setParams(key === 'overview' ? {} : { tab: key }, { replace: true })}
       />
-      {tab === 'overview' ? (
-        <QueryView query={overview}>{(data) => <OverviewView data={data} />}</QueryView>
-      ) : (
-        <ReportsView />
-      )}
+      {tab === 'overview' && <QueryView query={overview}>{(data) => <OverviewView data={data} />}</QueryView>}
+      {tab === 'phones' && <NasiyaPhonesView />}
+      {tab === 'reports' && <ReportsView />}
     </div>
   );
 }

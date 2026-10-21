@@ -231,6 +231,21 @@ export interface NasiyaPhone {
   marked_date: ISODate | null;
 }
 
+export interface NasiyaPhoneRow extends NasiyaPhone {
+  customer: CustomerRef | null;
+  sheet_name: string;
+}
+
+export interface NasiyaPhones {
+  report: NasiyaReportSummary | null;
+  /** First confirmed day: an age that reaches it is a lower bound ("≥"). */
+  history_start: ISODate | null;
+  /** Oldest first. */
+  rows: NasiyaPhoneRow[];
+}
+
+export type NasiyaPhoneGroup = 'debt' | 'qoldiq' | 'sotuv';
+
 export interface NasiyaModelRow {
   kind: NasiyaKind;
   model: string;
@@ -331,6 +346,7 @@ export const nasiyaKeys = {
   all: ['nasiya'] as const,
   overview: (on?: ISODate) => ['nasiya', 'overview', on ?? null] as const,
   series: (days: number) => ['nasiya', 'series', days] as const,
+  phones: (group?: NasiyaPhoneGroup) => ['nasiya', 'phones', group ?? null] as const,
   months: (customerId?: number) => ['nasiya', 'months', customerId ?? null] as const,
   customer: (id: number, on?: ISODate) => ['nasiya', 'customer', id, on ?? null] as const,
   reports: (status?: NasiyaStatus) => ['nasiya', 'reports', status ?? null] as const,
@@ -344,6 +360,10 @@ export function getNasiyaOverview(on?: ISODate): Promise<NasiyaOverview> {
 
 export function getNasiyaSeries(days = 90): Promise<NasiyaSeriesPoint[]> {
   return http.get<NasiyaSeriesPoint[]>('/nasiya/series', { days });
+}
+
+export function getNasiyaPhones(group?: NasiyaPhoneGroup): Promise<NasiyaPhones> {
+  return http.get<NasiyaPhones>('/nasiya/phones', { group });
 }
 
 export function getNasiyaMonths(customerId?: number): Promise<NasiyaMonthRow[]> {
