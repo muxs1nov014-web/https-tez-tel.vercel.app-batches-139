@@ -552,7 +552,9 @@ function ReportsView() {
                   <th>Holati</th>
                   <th>Fayl</th>
                   <th>Kimdan</th>
-                  <th className="num">Telefon</th>
+                  <th className="num">Nasiya</th>
+                  <th className="num">Qoldiq</th>
+                  <th className="num">Sotuv</th>
                   <th className="num">Xato</th>
                   <th className="num">Diqqat</th>
                   <th className="num">Bog'lanmagan</th>
@@ -573,7 +575,15 @@ function ReportsView() {
                       {r.sent_by || '—'}
                       <div className="text-[11px]">{r.source === 'telegram' ? r.chat_title || 'Telegram' : 'Panel'}</div>
                     </td>
-                    <td className="num">{fmtQty(r.item_count)}</td>
+                    <td className="num">
+                      {fmtQty(r.nasiya_qty)} dona
+                      <div className="text-[11px] text-slate-500">{fmtUsd(r.nasiya_usd, { symbol: true, decimals: 0 })}</div>
+                    </td>
+                    <td className="num">{fmtQty(r.qoldiq_qty)} dona</td>
+                    <td className="num">
+                      {fmtQty(r.sotuv_qty)} dona
+                      <div className="text-[11px] text-slate-500">{fmtUsd(r.sotuv_usd, { symbol: true, decimals: 0 })}</div>
+                    </td>
                     <td className={`num ${r.error_count ? 'font-semibold text-danger-600' : 'text-slate-400'}`}>{r.error_count}</td>
                     <td className={`num ${r.warning_count ? 'text-warning-700' : 'text-slate-400'}`}>{r.warning_count}</td>
                     <td className={`num ${r.unlinked_sheets ? 'font-semibold text-warning-700' : 'text-slate-400'}`}>

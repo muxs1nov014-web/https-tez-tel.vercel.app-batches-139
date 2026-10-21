@@ -98,6 +98,12 @@ export interface NasiyaReportSummary {
   chat_title: string;
   sent_by: string;
   item_count: number;
+  /** Debt (nasiya + variant) phones in the file. */
+  nasiya_qty: number;
+  nasiya_usd: Num;
+  qoldiq_qty: number;
+  sotuv_qty: number;
+  sotuv_usd: Num;
   error_count: number;
   warning_count: number;
   sheet_count: number;

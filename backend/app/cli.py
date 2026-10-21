@@ -110,8 +110,10 @@ async def nasiya_import(paths: list[str]) -> None:
             except ValidationFailed as exc:
                 print(f"  {f.name}: {exc.detail}")
                 continue
-            print(f"  {f.name}: {report.report_date} — {'yangi' if created else 'avval yuklangan'}, "
-                  f"{report.item_count} dona, {report.error_count} xato")
+            k = (await nasiya_reports.summaries(session, [report]))[0]
+            print(f"  {f.name}: {report.report_date} — {'yangi' if created else 'avval yuklangan'}: "
+                  f"nasiya {k.nasiya_qty} dona {k.nasiya_usd:,.0f} $, qoldiq {k.qoldiq_qty} dona, "
+                  f"sotuv {k.sotuv_qty} dona {k.sotuv_usd:,.0f} $, {report.error_count} xato")
         out = await nasiya_reports.process_pending(session, None, since=None, allow_errors=True)
         await session.commit()
     print(f"hisoblandi: {out.confirmed} kun, almashtirildi: {out.superseded}")

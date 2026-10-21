@@ -134,6 +134,7 @@ async def list_reports(session: AsyncSession, status: str | None = None, limit: 
 async def summaries(session: AsyncSession, reports: list[NasiyaReport]) -> list[NasiyaReportSummary]:
     ids = [r.id for r in reports]
     counts: dict[int, tuple[int, int]] = {}
+    kinds: dict[int, dict] = {}
     if ids:
         rows = await session.execute(
             select(NasiyaSheet.report_id, func.count(),
@@ -142,6 +143,18 @@ async def summaries(session: AsyncSession, reports: list[NasiyaReport]) -> list[
                                        .exists()))
             .where(NasiyaSheet.report_id.in_(ids)).group_by(NasiyaSheet.report_id))
         counts = {rid: (n, unlinked) for rid, n, unlinked in rows}
+        amount = NasiyaItem.qty * func.coalesce(NasiyaItem.price_usd, 0)
+        is_debt = NasiyaItem.kind.in_(("nasiya", "variant"))
+        for rid, d_qty, d_usd, q_qty, s_qty, s_usd in await session.execute(
+                select(NasiyaItem.report_id,
+                       func.coalesce(func.sum(NasiyaItem.qty).filter(is_debt), 0),
+                       func.coalesce(func.sum(amount).filter(is_debt), 0),
+                       func.coalesce(func.sum(NasiyaItem.qty).filter(NasiyaItem.kind == "qoldiq"), 0),
+                       func.coalesce(func.sum(NasiyaItem.qty).filter(NasiyaItem.kind == "sotuv"), 0),
+                       func.coalesce(func.sum(amount).filter(NasiyaItem.kind == "sotuv"), 0))
+                .where(NasiyaItem.report_id.in_(ids)).group_by(NasiyaItem.report_id)):
+            kinds[rid] = dict(nasiya_qty=int(d_qty), nasiya_usd=d_usd, qoldiq_qty=int(q_qty), sotuv_qty=int(s_qty),
+                              sotuv_usd=s_usd)
     reviewers = {}
     reviewer_ids = {r.reviewed_by for r in reports if r.reviewed_by}
     if reviewer_ids:
@@ -153,7 +166,7 @@ async def summaries(session: AsyncSession, reports: list[NasiyaReport]) -> list[
         chat_title=r.chat_title, sent_by=r.sent_by, item_count=r.item_count, error_count=r.error_count,
         warning_count=r.warning_count, sheet_count=counts.get(r.id, (0, 0))[0],
         unlinked_sheets=counts.get(r.id, (0, 0))[1], created_at=r.created_at, reviewed_at=r.reviewed_at,
-        reviewed_by=reviewers.get(r.reviewed_by), review_note=r.review_note) for r in reports]
+        reviewed_by=reviewers.get(r.reviewed_by), review_note=r.review_note, **kinds.get(r.id, {})) for r in reports]
 
 
 async def detail(session: AsyncSession, report_id: int) -> NasiyaReportDetail:

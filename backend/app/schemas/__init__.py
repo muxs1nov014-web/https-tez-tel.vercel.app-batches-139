@@ -807,6 +807,11 @@ class NasiyaReportSummary(BaseModel):
     chat_title: str
     sent_by: str
     item_count: int
+    nasiya_qty: int = 0  # debt (nasiya + variant) phones in the file
+    nasiya_usd: Num = 0
+    qoldiq_qty: int = 0
+    sotuv_qty: int = 0
+    sotuv_usd: Num = 0
     error_count: int
     warning_count: int
     sheet_count: int
