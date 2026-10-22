@@ -45,13 +45,6 @@ export function NasiyaPhonesView() {
   );
 }
 
-/** Nasiya by days, like the colours: up to 2 days, 3–4, from 5. */
-const AGE_BANDS = [
-  { label: '2 kungacha', sample: 0, test: (d: number) => d <= 2 },
-  { label: '3–4 kun', sample: 3, test: (d: number) => d > 2 && d < 5 },
-  { label: '5 kundan', sample: 5, test: (d: number) => d >= 5 },
-];
-
 type Totals = {
   debtQty: number;
   debtUsd: number;
@@ -59,9 +52,14 @@ type Totals = {
   sotuvQty: number;
   sotuvUsd: number;
   soldBack: number;
-  /** Nasiya per AGE_BANDS entry: [qty, usd]. */
-  bands: [number, number][];
+  /** Nasiya up to 2 days / older than 2 days / without IMEI (no days): [qty, usd]. */
+  fresh: [number, number];
+  late: [number, number];
+  noAge: [number, number];
 };
+
+/** The 2-day line the business watches: up to 2 days is fine, older than 2 days needs a call. */
+const LATE_AFTER = 2;
 
 /** Phones with the same state, model, days, price and term: one line with their IMEIs. */
 type Line = { key: string; first: NasiyaPhoneRow; qty: number; imeis: string[] };
@@ -85,11 +83,9 @@ function addTo(t: Totals, r: NasiyaPhoneRow) {
   } else {
     t.debtQty += r.qty;
     t.debtUsd += amount;
-    const band = r.age_days === null ? -1 : AGE_BANDS.findIndex((b) => b.test(r.age_days as number));
-    if (band >= 0) {
-      t.bands[band][0] += r.qty;
-      t.bands[band][1] += amount;
-    }
+    const bucket = r.age_days === null ? t.noAge : r.age_days > LATE_AFTER ? t.late : t.fresh;
+    bucket[0] += r.qty;
+    bucket[1] += amount;
   }
   if (r.sold_on) t.soldBack += r.qty;
 }
@@ -101,37 +97,55 @@ const emptyTotals = (): Totals => ({
   sotuvQty: 0,
   sotuvUsd: 0,
   soldBack: 0,
-  bands: AGE_BANDS.map(() => [0, 0]),
+  fresh: [0, 0],
+  late: [0, 0],
+  noAge: [0, 0],
 });
 
 const money = (usd: number) => fmtUsd(usd, { symbol: true, decimals: 0 });
 
-/** Nasiya older than 2 days: the bands after the first. */
-function overTwo(t: Totals): [number, number] {
-  return t.bands.slice(1).reduce<[number, number]>((s, [q, u]) => [s[0] + q, s[1] + u], [0, 0]);
+/** The whole list: nasiya in total, up to 2 days and older than 2 days (the two add up to the total). */
+function DebtSummary({ t }: { t: Totals }) {
+  if (t.debtQty === 0) return null;
+  const tiles = [
+    { label: 'Nasiya jami', v: [t.debtQty, t.debtUsd], tone: 'text-slate-900', bar: 'bg-slate-300' },
+    { label: `${LATE_AFTER} kungacha`, v: t.fresh, tone: 'text-slate-900', bar: 'bg-yellow-300' },
+    { label: `${LATE_AFTER} kundan o'tgan`, v: t.late, tone: 'text-danger-700', bar: 'bg-danger-600' },
+  ];
+  return (
+    <div className="px-4 pb-3 sm:px-5">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {tiles.map((x) => (
+          <div key={x.label} className="relative overflow-hidden rounded-xl bg-slate-50 px-4 py-3 dark:bg-white/5">
+            <span className={`absolute inset-y-0 left-0 w-1 ${x.bar}`} />
+            <div className="text-[12px] text-slate-500">{x.label}</div>
+            <div className={`text-[20px] font-semibold tabular-nums ${x.tone}`}>{money(x.v[1])}</div>
+            <div className="text-[12px] text-slate-500">{fmtQty(x.v[0])} dona</div>
+          </div>
+        ))}
+      </div>
+      {t.noAge[0] > 0 && (
+        <p className="mt-1.5 text-[12px] text-slate-500">
+          {fmtQty(t.noAge[0])} dona IMEI'siz yozilgan — kuni noma'lum, jamiga kirgan.
+        </p>
+      )}
+    </div>
+  );
 }
 
-/** Nasiya per day band in its colour, and everything older than 2 days together: for the whole list, and for each
- *  customer on its own under its name. */
-function AgeBands({ t, small = false }: { t: Totals; small?: boolean }) {
+/** Under a customer's name: its nasiya up to 2 days and older than 2 days. */
+function DebtSplit({ t }: { t: Totals }) {
   if (t.debtQty === 0) return null;
-  const [lateQty, lateUsd] = overTwo(t);
-  const chip = small ? 'rounded-full px-2 py-0.5' : 'rounded-full px-2.5 py-1';
   return (
-    <div
-      className={`flex flex-wrap items-center gap-2 px-4 sm:px-5 ${small ? 'pb-2.5 pl-10 text-[12px] sm:pl-11' : 'pb-3 text-[13px]'}`}
-    >
-      {!small && <span className="text-slate-600">Nasiya kunlari:</span>}
-      {AGE_BANDS.map((b, i) =>
-        small && t.bands[i][0] === 0 ? null : (
-          <span key={b.label} className={`${chip} font-medium ${debtAgeClass(b.sample)}`}>
-            {b.label}: {fmtQty(t.bands[i][0])} dona · {money(t.bands[i][1])}
-          </span>
-        ),
-      )}
-      <span className={`${chip} font-semibold text-danger-700 ring-1 ring-danger-200`}>
-        2 kundan ko'p jami: {fmtQty(lateQty)} dona · {money(lateUsd)}
+    <div className="flex flex-wrap items-center gap-2 px-4 pb-2.5 pl-10 text-[12px] sm:px-5 sm:pl-11">
+      <span className={`rounded-full px-2 py-0.5 font-medium ${debtAgeClass(0)}`}>
+        {LATE_AFTER} kungacha: {fmtQty(t.fresh[0])} dona · {money(t.fresh[1])}
       </span>
+      {t.late[0] > 0 && (
+        <span className={`rounded-full px-2 py-0.5 font-semibold ${debtAgeClass(5)}`}>
+          {LATE_AFTER} kundan o'tgan: {fmtQty(t.late[0])} dona · {money(t.late[1])}
+        </span>
+      )}
     </div>
   );
 }
@@ -225,7 +239,7 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
           </Button>
         )}
       </div>
-      <AgeBands t={totals} />
+      <DebtSummary t={totals} />
       {groups.length === 0 ? (
         <EmptyState title="Topilmadi" />
       ) : (
@@ -298,7 +312,7 @@ function CustomerPhones({
           </Link>
         )}
       </div>
-      <AgeBands t={g} small />
+      <DebtSplit t={g} />
       {open && (
         <TableWrap className="mx-4 mb-3 sm:mx-5">
           <table className="tbl">
