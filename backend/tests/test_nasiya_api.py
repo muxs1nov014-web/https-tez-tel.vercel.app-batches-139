@@ -467,3 +467,30 @@ async def test_ages_of_the_latest_day_run_to_today(client, operator_h, viewer_h,
     assert (by_imei[imei(3)], by_imei[imei(8)]) == (5, 4)  # in since 14.10 → 5 days on 18.10; 15.10 → 4 days
     past = (await client.get("/api/nasiya/phones?group=debt&on=2026-10-15", headers=viewer_h)).json()
     assert past["ages_as_of"] == "2026-10-15" and {p["imei"]: p["age_days"] for p in past["rows"]}[imei(3)] == 2
+
+
+async def test_customer_page_and_overview_work_days_after_the_last_file(client, operator_h, viewer_h, monkeypatch):
+    from app.services import reports
+    customers, d1, d2 = await _setup_two_days(client, operator_h)
+    await _confirm(client, operator_h, d2["id"])
+    monkeypatch.setattr(reports, "today", lambda: date(2026, 10, 22))
+    for cid in customers.values():
+        r = await client.get(f"/api/nasiya/customers/{cid}", headers=viewer_h)
+        assert r.status_code == 200, r.text
+    ali = (await client.get(f"/api/nasiya/customers/{customers['Ali aka']}", headers=viewer_h)).json()
+    assert {i["imei"]: i["age_days"] for i in ali["items"]}[imei(3)] == 9  # 14.10 → 22.10
+    # a third customer whose sheet has no event that day (its phones did not change): every customer page still opens
+    sami = await _customer(client, operator_h, "Sami aka")
+    customers["Sami aka"] = sami["id"]
+    day3 = {**DAY2, "Sami aka": [["Qoldiq", "15 blue 128", int(imei(9)), 1]]}
+    day4 = {**{k: v for k, v in DAY2.items() if k != "Sotuv"}, "Sami aka": day3["Sami aka"]}
+    for day, sheets in (("16", day3), ("17", day4)):
+        up = await _upload(client, operator_h, workbook(f"{day},10,2026", sheets), f"nazorat_{day}.10.2026.xlsx")
+        await _confirm(client, operator_h, (await _link_all(client, operator_h, await _detail(
+            client, operator_h, up["report_id"]), customers))["id"])
+    for cid in customers.values():
+        r = await client.get(f"/api/nasiya/customers/{cid}", headers=viewer_h)
+        assert r.status_code == 200, r.text
+    for url in ("/api/nasiya/overview", f"/api/nasiya/months?customer_id={customers['Ali aka']}", "/api/nasiya/phones"):
+        r = await client.get(url, headers=viewer_h)
+        assert r.status_code == 200, r.text

@@ -473,7 +473,9 @@ async def customer_detail(session: AsyncSession, customer_id: int, on: date | No
         return NasiyaCustomerDetail(customer=ref, report=None, row=None, items=[], models=[], events=[], series=[],
                                     schedule=[])
     day = await _load_day(session, report, _as_of(report, on))
-    customers = await _customers(session, [customer_id] + [e.previous.customer_id for e in day.events if e.previous]
+    # _customer_rows builds a row for every customer with a sheet that day, so all of them must be loaded
+    customers = await _customers(session, [customer_id] + [s.customer_id for s in day.sheets]
+                                 + [e.previous.customer_id for e in day.events if e.previous]
                                  + [e.row.customer_id for e in day.events])
     rows = [r for r in _customer_rows(day, customers, await _panel_debts(session)) if r.customer.id == customer_id]
     mine = [r for r in day.rows if r.customer_id == customer_id]
