@@ -1,8 +1,9 @@
 """Daily nasiya control (SPEC §18): upload / Telegram intake, review, confirmation and monitoring."""
 
 import io
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
+import pytest
 from openpyxl import Workbook
 from sqlalchemy import select
 
@@ -10,6 +11,13 @@ from app.models import NasiyaIntake, NasiyaReport, TelegramGroupMessage
 from app.services import nasiya_telegram
 from tests.test_customer_accounts import _customer
 from tests.test_nasiya_sheet import imei
+
+
+@pytest.fixture(autouse=True)
+def today_is_the_last_test_day(monkeypatch):
+    """Ages of the latest day run to today (SPEC §18.4); the test days are 14–17.10, so today is pinned to 15.10."""
+    from app.services import reports
+    monkeypatch.setattr(reports, "today", lambda: date(2026, 10, 15))
 
 
 def workbook(day: str, sheets: dict[str, list[list]]) -> bytes:
@@ -446,3 +454,16 @@ async def test_a_sold_phone_that_comes_back_is_an_alert_even_after_a_gap(client,
     await _confirm(client, operator_h, d4["id"])
     rows = (await client.get("/api/nasiya/phones", headers=viewer_h)).json()["rows"]
     assert {p["imei"]: p["sold_on"] for p in rows if p["sold_on"]} == {imei(1): "2026-10-15"}
+
+
+async def test_ages_of_the_latest_day_run_to_today(client, operator_h, viewer_h, monkeypatch):
+    from app.services import reports
+    customers, d1, d2 = await _setup_two_days(client, operator_h)
+    await _confirm(client, operator_h, d2["id"])
+    monkeypatch.setattr(reports, "today", lambda: date(2026, 10, 18))  # the last file counted is 15.10
+    data = (await client.get("/api/nasiya/phones?group=debt", headers=viewer_h)).json()
+    assert data["ages_as_of"] == "2026-10-18"
+    by_imei = {p["imei"]: p["age_days"] for p in data["rows"]}
+    assert (by_imei[imei(3)], by_imei[imei(8)]) == (5, 4)  # in since 14.10 → 5 days on 18.10; 15.10 → 4 days
+    past = (await client.get("/api/nasiya/phones?group=debt&on=2026-10-15", headers=viewer_h)).json()
+    assert past["ages_as_of"] == "2026-10-15" and {p["imei"]: p["age_days"] for p in past["rows"]}[imei(3)] == 2

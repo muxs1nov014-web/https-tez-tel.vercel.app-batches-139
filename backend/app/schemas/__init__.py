@@ -1024,6 +1024,7 @@ class NasiyaPhoneRow(NasiyaDebtItemOut):
 class NasiyaPhonesOut(BaseModel):
     report: "NasiyaReportSummary | None"
     history_start: date | None  # first confirmed day: an age that reaches it is a lower bound
+    ages_as_of: date | None = None  # ages are counted up to this day (today for the latest day)
     rows: list[NasiyaPhoneRow]  # oldest first
 
 

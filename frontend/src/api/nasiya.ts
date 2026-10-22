@@ -244,6 +244,8 @@ export interface NasiyaPhones {
   report: NasiyaReportSummary | null;
   /** First confirmed day: an age that reaches it is a lower bound ("≥"). */
   history_start: ISODate | null;
+  /** Ages are counted up to this day: today for the latest day. */
+  ages_as_of: ISODate | null;
   /** Oldest first. */
   rows: NasiyaPhoneRow[];
 }

@@ -35,7 +35,7 @@ from app.schemas import (
 )
 from app.services import catalog
 from app.services import customer_accounts as accounts
-from app.services import nasiya_reports
+from app.services import nasiya_reports, reports
 from app.services.nasiya_reports import customer_ref
 
 ZERO = Decimal(0)
@@ -296,9 +296,15 @@ def _totals(rows: list[Row], qoldiq_value: Decimal, ages: dict[str, int]) -> Nas
         overdue_qty=overdue_qty, overdue_usd=overdue_usd)
 
 
-def _ages(report: NasiyaReport, since: dict[str, Since]) -> dict[str, int]:
+def _ages(as_of: date, since: dict[str, Since]) -> dict[str, int]:
     """Days counted the way people count them: the day the phone appeared is day 1 (in on 13.10 → 3 days on 15.10)."""
-    return {imei: (report.report_date - s.since).days + 1 for imei, s in since.items() if s.since}
+    return {imei: (as_of - s.since).days + 1 for imei, s in since.items() if s.since}
+
+
+def _as_of(report: NasiyaReport, on: date | None) -> date:
+    """Ages of the latest day run to today: a phone in nasiya since 13.10 is 11 days old on 23.10 even when the last
+    file counted is from 21.10 (it was still in nasiya then). An explicit past day keeps that day."""
+    return max(report.report_date, reports.today()) if on is None else report.report_date
 
 
 @dataclass
@@ -312,12 +318,12 @@ class _Day:
     events: list[Event]
 
 
-async def _load_day(session: AsyncSession, report: NasiyaReport) -> _Day:
+async def _load_day(session: AsyncSession, report: NasiyaReport, as_of: date | None = None) -> _Day:
     rows = await _rows(session, report.id)
     since = await _since(session, report, rows)
     prev = await previous_confirmed(session, report.report_date)
     events = await _day_events(session, report, prev, rows) if prev else []
-    return _Day(report, rows, await _sheets(session, report.id), since, _ages(report, since), prev, events)
+    return _Day(report, rows, await _sheets(session, report.id), since, _ages(as_of or report.report_date, since), prev, events)
 
 
 def _customer_rows(day: _Day, customers: dict[int, Customer], panel_debt: dict[int, Decimal]) -> list[NasiyaCustomerRow]:
@@ -377,7 +383,7 @@ async def overview(session: AsyncSession, on: date | None = None) -> NasiyaOverv
         return NasiyaOverviewOut(report=None, previous_date=None, totals=None, previous_totals=None,
                                  aging=_aging([]), customers=[], counts=[], alerts=[], pending_reports=pending,
                                  history_start=None)
-    day = await _load_day(session, report)
+    day = await _load_day(session, report, _as_of(report, on))
     customers = await _customers(session, [r.customer_id for r in day.rows] + [s.customer_id for s in day.sheets]
                                  + [e.previous.customer_id for e in day.events if e.previous])
     rows = _customer_rows(day, customers, await _panel_debts(session))
@@ -443,7 +449,7 @@ async def phones(session: AsyncSession, group: str | None = None, customer_id: i
     report = await latest_confirmed(session, on)
     if report is None:
         return NasiyaPhonesOut(report=None, history_start=None, rows=[])
-    day = await _load_day(session, report)
+    day = await _load_day(session, report, _as_of(report, on))
     kinds = PHONE_GROUPS[group] if group else DEBT_KINDS + ("qoldiq", "sotuv")
     rows = [r for r in day.rows if r.kind in kinds and (customer_id is None or r.customer_id == customer_id)]
     customers = await _customers(session, [r.customer_id for r in rows])
@@ -456,7 +462,7 @@ async def phones(session: AsyncSession, group: str | None = None, customer_id: i
     out.sort(key=lambda p: (order[group_of(p.kind)], -(p.age_days if p.age_days is not None else -1),
                             p.customer.name if p.customer else "", p.model, p.imei or ""))
     return NasiyaPhonesOut(report=(await nasiya_reports.summaries(session, [report]))[0],
-                           history_start=await _history_start(session), rows=out)
+                           history_start=await _history_start(session), ages_as_of=_as_of(report, on), rows=out)
 
 
 async def customer_detail(session: AsyncSession, customer_id: int, on: date | None = None) -> NasiyaCustomerDetail:
@@ -466,7 +472,7 @@ async def customer_detail(session: AsyncSession, customer_id: int, on: date | No
     if report is None:
         return NasiyaCustomerDetail(customer=ref, report=None, row=None, items=[], models=[], events=[], series=[],
                                     schedule=[])
-    day = await _load_day(session, report)
+    day = await _load_day(session, report, _as_of(report, on))
     customers = await _customers(session, [customer_id] + [e.previous.customer_id for e in day.events if e.previous]
                                  + [e.row.customer_id for e in day.events])
     rows = [r for r in _customer_rows(day, customers, await _panel_debts(session)) if r.customer.id == customer_id]

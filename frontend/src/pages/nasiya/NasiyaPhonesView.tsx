@@ -33,7 +33,7 @@ export function NasiyaPhonesView() {
       <QueryView query={query}>
         {(data) =>
           data.report ? (
-            <PhonesTable rows={data.rows} day={data.report.report_date} historyStart={data.history_start} />
+            <PhonesTable rows={data.rows} day={data.report.report_date} asOf={data.ages_as_of} historyStart={data.history_start} />
           ) : (
             <Card>
               <EmptyState title="Hali hisoblangan kun yo'q" />
@@ -74,7 +74,8 @@ type CustomerGroup = Totals & {
 
 const isDebt = (r: NasiyaPhoneRow) => r.kind === 'nasiya' || r.kind === 'variant';
 
-function addTo(t: Totals, r: NasiyaPhoneRow) {
+/** `day`: the counted file's day; nasiya that started on it was given that day. */
+function addTo(t: Totals, r: NasiyaPhoneRow, day: string | null) {
   const amount = toNum(r.price_usd) * r.qty;
   if (r.kind === 'qoldiq') t.qoldiqQty += r.qty;
   else if (r.kind === 'sotuv') {
@@ -83,9 +84,9 @@ function addTo(t: Totals, r: NasiyaPhoneRow) {
   } else {
     t.debtQty += r.qty;
     t.debtUsd += amount;
-    // day 1 at this customer in nasiya = given on this day (new, or sold on credit from qoldiq)
+    // started in nasiya at this customer on the file's day = given that day (new, or sold on credit from qoldiq)
     const bucket =
-      r.age_days === 1 && r.since_exact
+      r.since !== null && r.since === day && r.since_exact
         ? t.newToday
         : r.age_days === WATCH_DAY
           ? t.twoDays
@@ -160,7 +161,17 @@ function DebtSplit({ t }: { t: Totals }) {
   );
 }
 
-function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day: string | null; historyStart: string | null }) {
+function PhonesTable({
+  rows,
+  day,
+  asOf,
+  historyStart,
+}: {
+  rows: NasiyaPhoneRow[];
+  day: string | null;
+  asOf: string | null;
+  historyStart: string | null;
+}) {
   const [search, setSearch] = useState('');
   const [customer, setCustomer] = useState('');
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -190,8 +201,8 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
         g = { ...emptyTotals(), key, name: r.customer?.name ?? r.sheet_name, customerId: r.customer?.id ?? null, lines: [], oldestDebt: null };
         byKey.set(key, g);
       }
-      addTo(g, r);
-      addTo(all, r);
+      addTo(g, r, day);
+      addTo(all, r, day);
       if (isDebt(r) && r.age_days !== null && (g.oldestDebt === null || r.age_days > (g.oldestDebt.age_days ?? -1))) g.oldestDebt = r;
       const lineKey = [key, r.kind, r.model, r.age_days, r.since_exact, r.overdue, r.price_usd, r.term_days, r.sold_on].join('|');
       let line = lines.get(lineKey);
@@ -204,7 +215,7 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
       if (r.imei) line.imeis.push(r.imei);
     }
     return { groups: [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name)), totals: all };
-  }, [filtered]);
+  }, [filtered, day]);
 
   // a chosen customer or a search shows the phones at once; otherwise each customer is one line until opened
   const focused = customer !== '' || search.trim() !== '';
@@ -222,8 +233,9 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
     <Card
       title={`Telefonlar · ${fmtDate(day)}`}
       subtitle={
-        'Har bir mijoz alohida: nasiya, qoldiq (necha kundan beri turibdi) va sotuv. Mijoz nomini bosing — telefonlari ochiladi.' +
-        (historyStart ? ` Hisob ${fmtDate(historyStart)} dan: «≥» — undan oldin ham bo'lgan.` : '')
+        `Kunlar ${fmtDate(asOf ?? day)} gacha sanaladi (berilgan kun — 1-kun).` +
+        (asOf && day && asOf !== day ? ` Oxirgi hisoblangan fayl: ${fmtDate(day)} — yangisini botga forward qiling.` : '') +
+        (historyStart ? ` Hisob ${fmtDate(historyStart)} dan boshlangan: «≥» — telefon undan oldin ham bo'lgan.` : '')
       }
       actions={
         <>
