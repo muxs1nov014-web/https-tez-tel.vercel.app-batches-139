@@ -9,28 +9,46 @@ import { fmtQty, fmtUsd, fmtUsdUp, toNum } from '../../lib/format';
  * merged, in the order the models first appear. Uses the effective cost, so real expenses show once entered.
  * Shown as `qty dona × unit` in whole dollars, cents rounded up.
  */
-export function ModelCostCard({ batch }: { batch: BatchDetail }) {
-  const rows = useMemo(() => {
-    const byProduct = new Map<number, { productId: number; name: string; qty: number; total: number; extra: number }>();
-    for (const line of batch.lines) {
-      const row = byProduct.get(line.product.id) ?? { productId: line.product.id, name: line.product.name, qty: 0, total: 0, extra: 0 };
-      row.qty += line.qty;
-      row.total += toNum(line.unit_cost) * line.qty;
-      row.extra += toNum(line.overhead) * line.qty;
-      byProduct.set(line.product.id, row);
-    }
-    return [...byProduct.values()].map((r) => ({
-      ...r,
-      unit: r.qty > 0 ? r.total / r.qty : 0,
-      overhead: r.qty > 0 ? r.extra / r.qty : 0,
-    }));
-  }, [batch.lines]);
+export interface ModelCostRow {
+  productId: number;
+  name: string;
+  qty: number;
+  /** Landed cost of one phone. */
+  unit: number;
+  /** Expenses on top of the purchase price, per phone. */
+  overhead: number;
+}
 
-  if (rows.length === 0) return null;
-  const hasActuals = batch.categories.some((c) => c.actual_total !== null);
-  const note = hasActuals
+/** Lines of one model merged, in the order the models first appear (also the Telegram picture's rows). */
+export function modelCostRows(batch: BatchDetail): ModelCostRow[] {
+  const byProduct = new Map<number, { productId: number; name: string; qty: number; total: number; extra: number }>();
+  for (const line of batch.lines) {
+    const row = byProduct.get(line.product.id) ?? { productId: line.product.id, name: line.product.name, qty: 0, total: 0, extra: 0 };
+    row.qty += line.qty;
+    row.total += toNum(line.unit_cost) * line.qty;
+    row.extra += toNum(line.overhead) * line.qty;
+    byProduct.set(line.product.id, row);
+  }
+  return [...byProduct.values()].map((r) => ({
+    productId: r.productId,
+    name: r.name,
+    qty: r.qty,
+    unit: r.qty > 0 ? r.total / r.qty : 0,
+    overhead: r.qty > 0 ? r.extra / r.qty : 0,
+  }));
+}
+
+export function modelCostNote(batch: BatchDetail): string {
+  return batch.categories.some((c) => c.actual_total !== null)
     ? "Bitta telefonga tushgan tannarx (real xarajatlar bilan): narx + ustama + partiya xarajati ulushi."
     : "Bitta telefonga tushgan taxminiy tannarx: narx + ustama + partiya xarajati ulushi.";
+}
+
+export function ModelCostCard({ batch }: { batch: BatchDetail }) {
+  const rows = useMemo(() => modelCostRows(batch), [batch]);
+
+  if (rows.length === 0) return null;
+  const note = modelCostNote(batch);
 
   return (
     <>

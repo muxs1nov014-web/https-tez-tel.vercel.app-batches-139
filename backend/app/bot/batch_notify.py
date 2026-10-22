@@ -11,9 +11,10 @@ from dataclasses import dataclass
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
+from aiogram.types import BufferedInputFile
 
 from app.bot import group_log
-from app.bot.batch_texts import render
+from app.bot.batch_texts import caption, render
 from app.core.config import get_settings
 from app.schemas import BatchDetail
 
@@ -44,14 +45,19 @@ def make_bot(allowed_chat_ids: list[int | str]) -> Bot:
     return bot
 
 
-async def send(batch: BatchDetail, targets: list[int | str]) -> SendResult:
-    """One attempt per chat, no retries. A chat that fails is logged and counted; the rest still get it."""
-    parts = render(batch)
+async def send(batch: BatchDetail, targets: list[int | str], photo: bytes | None = None) -> SendResult:
+    """One attempt per chat, no retries. A chat that fails is logged and counted; the rest still get it.
+    With `photo` (the panel's picture of the "Model bo'yicha tannarx" card) the picture goes with a short caption
+    instead of the text message."""
+    parts = [] if photo else render(batch)
     bot = make_bot(targets)
     gone: list[int | str] = []
 
     async def deliver(chat_id: int | str) -> bool:
         try:
+            if photo:
+                await bot.send_photo(chat_id, BufferedInputFile(photo, f"tannarx_{batch.batch_date}.png"),
+                                     caption=caption(batch))
             for text in parts:
                 await bot.send_message(chat_id, text)
             return True

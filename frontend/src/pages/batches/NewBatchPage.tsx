@@ -227,7 +227,7 @@ function NewBatchForm({ settings, channels, categories }: NewBatchFormProps) {
       queryClient.setQueryData(batchKeys.detail(detail.id), detail);
       void invalidateLedger(queryClient);
       toast.success(`Partiya ${fmtDate(detail.batch_date)} saqlandi`);
-      navigate(`/batches/${detail.id}`);
+      navigate(`/batches/${detail.id}`, { state: { sendTelegram: true } }); // the cost picture goes to Telegram next
     },
   });
 

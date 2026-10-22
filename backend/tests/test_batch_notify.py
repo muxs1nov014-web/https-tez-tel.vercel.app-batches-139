@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError
-from aiogram.methods import SendMessage
+from aiogram.methods import SendMessage, SendPhoto
 
 from app.bot import batch_notify, batch_texts, group_log
 from app.core.config import get_settings
@@ -132,6 +132,29 @@ async def test_send_to_picked_chats_only(client, session, admin_h, operator_h, t
     strict = group_log.GroupSilence()  # the webhook/polling bot still never writes to a group
     with pytest.raises(group_log.GroupWriteBlocked):
         await strict(lambda bot, method: None, None, SendMessage(chat_id=GROUP_ID, text="x"))
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 64
+
+
+async def test_card_picture_goes_with_a_short_caption(client, session, operator_h, telegram_calls):
+    await _bot_users(session)
+    product = await _product(client, operator_h, model="iPhone 18 Pro", storage="1TB", color="Burgundy")
+    detail = await _create(client, operator_h, product["id"])
+    url = f"/api/batches/{detail['id']}/notify-photo"
+    r = await client.post(url, headers=operator_h, files={"photo": ("tannarx.png", PNG, "image/png")},
+                          data={"chat_ids": ["100", "200"]})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"recipients": 2, "sent": 2, "failed": 0, "blocked": 0, "skipped": 0}
+    assert [type(c) for c in telegram_calls] == [SendPhoto, SendPhoto]  # the picture only, no text message
+    cap = telegram_calls[0].caption
+    assert cap.startswith("📦 Partiya · 05.10.2026") and "Jami: 10 dona" in cap and "Taxminiy" in cap
+    r = await client.post(url, headers=operator_h, files={"photo": ("x.png", b"GIF89a", "image/png")},
+                          data={"chat_ids": ["100"]})
+    assert r.status_code == 422 and "PNG" in r.json()["detail"]
+    r = await client.post(url, headers=operator_h, files={"photo": ("tannarx.png", PNG, "image/png")},
+                          data={"chat_ids": ["999"]})
+    assert r.status_code == 422 and "999" in r.json()["detail"]
 
 
 async def test_only_offered_chats_can_be_picked(client, session, operator_h, telegram_calls):

@@ -1,6 +1,6 @@
-import { Fragment, useCallback, useState, type FormEvent } from 'react';
+import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   batchKeys,
   deleteBatch,
@@ -99,8 +99,16 @@ function BatchDetailView({ batch }: { batch: BatchDetail }) {
   const [sheetLineId, setSheetLineId] = useState<number | null>(null);
   const [editHeader, setEditHeader] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  /** Per-model unit cost to Telegram (SPEC §17), to the people picked in the modal. */
-  const [sendOpen, setSendOpen] = useState(false);
+  const location = useLocation();
+  /** Per-model unit cost to Telegram (SPEC §17), to the people picked in the modal; opens by itself right after a
+   *  new batch is saved. */
+  const [sendOpen, setSendOpen] = useState(
+    () => (location.state as { sendTelegram?: boolean } | null)?.sendTelegram === true && can('batches.write'),
+  );
+  useEffect(() => {
+    // once: a reload or going back to this page does not open it again
+    if ((location.state as { sendTelegram?: boolean } | null)?.sendTelegram) navigate('.', { replace: true, state: null });
+  }, [location.state, navigate]);
 
   /** Every batch mutation returns the fresh BatchDetail; costs changed, so the ledger is stale. */
   const applyDetail = useCallback(
@@ -492,7 +500,7 @@ function BatchDetailView({ batch }: { batch: BatchDetail }) {
       </div>
 
       {sendOpen && (
-        <SendTelegramModal batchId={batch.id} title={`Partiya ${fmtDate(batch.batch_date)}`} onClose={() => setSendOpen(false)} />
+        <SendTelegramModal batch={batch} title={`Partiya ${fmtDate(batch.batch_date)}`} onClose={() => setSendOpen(false)} />
       )}
 
       {sheetLine && (

@@ -59,6 +59,14 @@ export function notifyBatch(batchId: number, chatIds: string[]): Promise<NotifyR
   return http.post<NotifyResult>(`/batches/${batchId}/notify`, { chat_ids: chatIds });
 }
 
+/** The same, as a picture of the "Model bo'yicha tannarx" card (PNG) with a short caption. */
+export function notifyBatchPhoto(batchId: number, chatIds: string[], png: Blob): Promise<NotifyResult> {
+  const form = new FormData();
+  form.append('photo', png, 'tannarx.png');
+  for (const id of chatIds) form.append('chat_ids', id);
+  return http.upload<NotifyResult>(`/batches/${batchId}/notify-photo`, form);
+}
+
 /** Toast text for a send result. */
 export function notifyResultText(r: NotifyResult): string {
   const parts: string[] = [];

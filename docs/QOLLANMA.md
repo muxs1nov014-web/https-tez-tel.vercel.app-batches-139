@@ -33,8 +33,10 @@ Rollar:
    avtomatik hisoblaydi.
 5. Telegramga yuborish: partiya sahifasidagi **Telegramga yuborish** tugmasini bosing, kerakli odamlarni
    (bittasini, bir nechtasini yoki **Hammasi**ni) belgilang va **Yuborish**ni bosing. Belgilanganlarga
-   **model bo'yicha 1 dona tannarx** boradi: har bir model, soni va bitta telefon tannarxi (bitta model bir necha
-   qatorda bo'lsa, ular qo'shilib, o'rtachasi chiqadi). Saqlashning o'zi hech narsa yubormaydi.
+   **model bo'yicha 1 dona tannarx** rasm (skrinshot) bo'lib boradi: har bir model, xarajat, soni va bitta telefon
+   tannarxi, pastida jami (bitta model bir necha qatorda bo'lsa, ular qo'shilib, o'rtachasi chiqadi). Rasm oynada
+   oldindan ko'rinadi. Yangi partiya saqlangach, bu oyna o'zi ochiladi — tekshirib **Yuborish**ni bosing; saqlashning
+   o'zi hech narsa yubormaydi.
    Model yoki xarajat tuzatilsa, tugmani yana bosing. Keyingi safar oxirgi tanlov belgilangan holda ochiladi.
    Kimdir botni bloklagan yoki chatni o'chirgan bo'lsa, unga faqat bir marta urinadi. Keyin ro'yxatda u qizil yozuv
    bilan ko'rinadi va unga yuborilmaydi. O'sha odam botga qayta yozsa (yoki /start bossa), yana yuboriladi.

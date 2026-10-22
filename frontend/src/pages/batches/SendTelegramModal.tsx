@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { errorMessage } from '../../api/client';
-import { listRecipients, notifyBatch, notifyResultText, telegramKeys, type Recipient } from '../../api/telegram';
+import type { BatchDetail } from '../../api/batches';
+import { listRecipients, notifyBatch, notifyBatchPhoto, notifyResultText, telegramKeys, type Recipient } from '../../api/telegram';
 import { Alert } from '../../components/ui/Alert';
 import { Button } from '../../components/ui/Button';
 import { PaperAirplaneIcon } from '../../components/ui/icons';
 import { Modal, ModalBody, ModalFooter } from '../../components/ui/Modal';
 import { LoadingState } from '../../components/ui/States';
 import { useToast } from '../../components/ui/Toast';
+import { drawCostPicture } from './costPicture';
 
 /** The last choice, per browser: the same people usually get every batch. */
 const STORAGE_KEY = 'teztel.batchNotify.chosen';
@@ -32,14 +34,33 @@ function saveChosen(ids: string[]) {
 const KIND_LABEL: Record<Recipient['kind'], string> = { user: '', group: 'Guruh', channel: 'Kanal' };
 
 interface SendTelegramModalProps {
-  batchId: number;
+  batch: BatchDetail;
   title: string;
   onClose: () => void;
 }
 
-/** Pick who gets this batch's per-model unit cost in Telegram (SPEC §17). */
-export function SendTelegramModal({ batchId, title, onClose }: SendTelegramModalProps) {
+/** Pick who gets this batch's per-model unit cost in Telegram (SPEC §17): a picture of the
+ *  "Model bo'yicha tannarx" card, previewed here; the text message only if the browser cannot draw it. */
+export function SendTelegramModal({ batch, title, onClose }: SendTelegramModalProps) {
   const toast = useToast();
+  const [picture, setPicture] = useState<{ blob: Blob; url: string } | null>(null);
+  const [pictureFailed, setPictureFailed] = useState(false);
+
+  useEffect(() => {
+    let url: string | null = null;
+    let cancelled = false;
+    drawCostPicture(batch)
+      .then((blob) => {
+        if (cancelled) return;
+        url = URL.createObjectURL(blob);
+        setPicture({ blob, url });
+      })
+      .catch(() => !cancelled && setPictureFailed(true));
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [batch]);
   const query = useQuery({ queryKey: telegramKeys.recipients, queryFn: listRecipients });
   const recipients = useMemo(() => query.data ?? [], [query.data]);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
@@ -51,7 +72,7 @@ export function SendTelegramModal({ batchId, title, onClose }: SendTelegramModal
   }, [query.data]);
 
   const send = useMutation({
-    mutationFn: (ids: string[]) => notifyBatch(batchId, ids),
+    mutationFn: (ids: string[]) => (picture ? notifyBatchPhoto(batch.id, ids, picture.blob) : notifyBatch(batch.id, ids)),
     onSuccess: (r, ids) => {
       saveChosen(ids);
       if (r.failed > 0 || r.recipients === 0) toast.error(notifyResultText(r));
@@ -87,7 +108,16 @@ export function SendTelegramModal({ batchId, title, onClose }: SendTelegramModal
           </Alert>
         ) : (
           <>
-            <p className="text-[13px] text-slate-500">Xabar kimlarga borsin? Model bo'yicha 1 dona tannarx yuboriladi.</p>
+            <p className="text-[13px] text-slate-500">
+              Kimlarga borsin? Model bo'yicha 1 dona tannarx {pictureFailed ? "matn bo'lib" : "shu rasm bo'lib"} yuboriladi.
+            </p>
+            {picture && (
+              <img
+                src={picture.url}
+                alt="Model bo'yicha tannarx"
+                className="max-h-[40vh] w-full rounded-[12px] object-contain object-top ring-1 ring-slate-200/80 dark:ring-white/[0.08]"
+              />
+            )}
             <div className="overflow-hidden rounded-[14px] ring-1 ring-slate-200/80 dark:ring-white/[0.08]">
               <label className="flex min-h-[48px] cursor-pointer items-center gap-3 border-b border-slate-200/70 bg-slate-50 px-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
                 <input
@@ -142,7 +172,7 @@ export function SendTelegramModal({ batchId, title, onClose }: SendTelegramModal
           variant="primary"
           icon={<PaperAirplaneIcon className="h-4 w-4" />}
           loading={send.isPending}
-          disabled={chosenIds.length === 0}
+          disabled={chosenIds.length === 0 || (!picture && !pictureFailed)}
           onClick={() => send.mutate(chosenIds)}
         >
           Yuborish{chosenIds.length > 0 ? ` (${chosenIds.length})` : ''}

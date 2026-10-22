@@ -489,6 +489,12 @@ automatically; it goes only from the batch page button, to the people picked the
   Amounts are whole dollars, cents always rounded up (client request: 1954.56 → 1955 $; cents are taken first, so
   1954.00 stays 1954). `Jami` is `Σ qty × rounded unit`, so it adds up from the rows.
   Split at line breaks into ≤ 4000-character messages.
+- Picture (2026-10-22, client request "a screenshot like the card after every batch"): the panel draws the card on a
+  canvas (`pages/batches/costPicture.ts`: batch, rows with `xarajat +…` · `qty dona ×` · unit, `Jami`) and sends it
+  with `POST /batches/{id}/notify-photo` (multipart: `photo` PNG ≤ 5 MB, repeated `chat_ids`); the bot sends it as a
+  photo with a caption (batch, `Jami`, estimated or real) instead of the text message. The text endpoint stays as the
+  fallback when the browser cannot draw. The picker shows the picture before sending and opens by itself right after a
+  new batch is saved (the operator still presses Yuborish).
 - `POST /batches` sends nothing.
 - `GET /telegram/recipients` (operator) → `[{chat_id, name, kind: 'user'|'group'|'channel', blocked}]`: the configured
   groups/channels first, then active bot users by name.
