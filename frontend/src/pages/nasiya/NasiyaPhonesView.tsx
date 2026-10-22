@@ -45,7 +45,23 @@ export function NasiyaPhonesView() {
   );
 }
 
-type Totals = { debtQty: number; debtUsd: number; qoldiqQty: number; sotuvQty: number; sotuvUsd: number; soldBack: number };
+/** Nasiya by days, like the colours: up to 2 days, 3–4, from 5. */
+const AGE_BANDS = [
+  { label: '2 kungacha', sample: 0, test: (d: number) => d <= 2 },
+  { label: '3–4 kun', sample: 3, test: (d: number) => d > 2 && d < 5 },
+  { label: '5 kundan', sample: 5, test: (d: number) => d >= 5 },
+];
+
+type Totals = {
+  debtQty: number;
+  debtUsd: number;
+  qoldiqQty: number;
+  sotuvQty: number;
+  sotuvUsd: number;
+  soldBack: number;
+  /** Nasiya per AGE_BANDS entry: [qty, usd]. */
+  bands: [number, number][];
+};
 
 /** Phones with the same state, model, days, price and term: one line with their IMEIs. */
 type Line = { key: string; first: NasiyaPhoneRow; qty: number; imeis: string[] };
@@ -69,11 +85,50 @@ function addTo(t: Totals, r: NasiyaPhoneRow) {
   } else {
     t.debtQty += r.qty;
     t.debtUsd += amount;
+    const band = r.age_days === null ? -1 : AGE_BANDS.findIndex((b) => b.test(r.age_days as number));
+    if (band >= 0) {
+      t.bands[band][0] += r.qty;
+      t.bands[band][1] += amount;
+    }
   }
   if (r.sold_on) t.soldBack += r.qty;
 }
 
-const emptyTotals = (): Totals => ({ debtQty: 0, debtUsd: 0, qoldiqQty: 0, sotuvQty: 0, sotuvUsd: 0, soldBack: 0 });
+const emptyTotals = (): Totals => ({
+  debtQty: 0,
+  debtUsd: 0,
+  qoldiqQty: 0,
+  sotuvQty: 0,
+  sotuvUsd: 0,
+  soldBack: 0,
+  bands: AGE_BANDS.map(() => [0, 0]),
+});
+
+const money = (usd: number) => fmtUsd(usd, { symbol: true, decimals: 0 });
+
+/** Nasiya older than 2 days: the bands after the first. */
+function overTwo(t: Totals): [number, number] {
+  return t.bands.slice(1).reduce<[number, number]>((s, [q, u]) => [s[0] + q, s[1] + u], [0, 0]);
+}
+
+/** The whole list: nasiya per day band in its colour, and everything older than 2 days together. */
+function AgeBands({ t }: { t: Totals }) {
+  if (t.debtQty === 0) return null;
+  const [lateQty, lateUsd] = overTwo(t);
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-4 pb-3 text-[13px] sm:px-5">
+      <span className="text-slate-600">Nasiya kunlari:</span>
+      {AGE_BANDS.map((b, i) => (
+        <span key={b.label} className={`rounded-full px-2.5 py-1 font-medium ${debtAgeClass(b.sample)}`}>
+          {b.label}: {fmtQty(t.bands[i][0])} dona · {money(t.bands[i][1])}
+        </span>
+      ))}
+      <span className="rounded-full px-2.5 py-1 font-semibold text-danger-700 ring-1 ring-danger-200">
+        2 kundan ko'p jami: {fmtQty(lateQty)} dona · {money(lateUsd)}
+      </span>
+    </div>
+  );
+}
 
 function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day: string | null; historyStart: string | null }) {
   const [search, setSearch] = useState('');
@@ -158,17 +213,13 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 pb-3 text-[13px] text-slate-600 sm:px-5">
         <TotalsLine t={totals} />
-        <span className="flex items-center gap-1.5">
-          <span className={`rounded-full px-1.5 text-[11px] ${debtAgeClass(0)}`}>2 kungacha</span>
-          <span className={`rounded-full px-1.5 text-[11px] ${debtAgeClass(3)}`}>3–4 kun</span>
-          <span className={`rounded-full px-1.5 text-[11px] ${debtAgeClass(5)}`}>5 kundan</span>
-        </span>
         {groups.length > 0 && !focused && (
           <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setOpen(allOpen ? new Set() : new Set(groups.map((g) => g.key)))}>
             {allOpen ? "Hammasini yig'ish" : 'Hammasini ochish'}
           </Button>
         )}
       </div>
+      <AgeBands t={totals} />
       {groups.length === 0 ? (
         <EmptyState title="Topilmadi" />
       ) : (
@@ -183,13 +234,20 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
   );
 }
 
-function TotalsLine({ t }: { t: Totals }) {
+function TotalsLine({ t, perCustomer = false }: { t: Totals; perCustomer?: boolean }) {
+  const [lateQty, lateUsd] = overTwo(t);
   return (
     <>
       {t.debtQty > 0 && (
         <span>
           Nasiya <span className="font-medium text-slate-900">{fmtQty(t.debtQty)}</span> ·{' '}
-          <span className="font-medium text-slate-900">{fmtUsd(t.debtUsd, { symbol: true, decimals: 0 })}</span>
+          <span className="font-medium text-slate-900">{money(t.debtUsd)}</span>
+        </span>
+      )}
+      {perCustomer && t.debtQty > 0 && (
+        <span className={lateQty > 0 ? 'text-danger-700' : 'text-slate-500'}>
+          2 kundan ko'p: <span className="font-semibold">{fmtQty(lateQty)}</span>
+          {lateQty > 0 && <> · <span className="font-semibold">{money(lateUsd)}</span></>}
         </span>
       )}
       {t.qoldiqQty > 0 && (
@@ -234,7 +292,7 @@ function CustomerPhones({
         {g.oldestDebt && (
           <AgeBadge days={g.oldestDebt.age_days} exact={g.oldestDebt.since_exact} overdue={g.oldestDebt.overdue} kind="nasiya" />
         )}
-        <TotalsLine t={g} />
+        <TotalsLine t={g} perCustomer />
         {g.customerId !== null && (
           <Link to={`/nasiya/customers/${g.customerId}`} className="ml-auto text-[12px] text-primary-700 hover:underline">
             Mijoz sahifasi →
