@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { getNasiyaPhones, nasiyaKeys, type NasiyaPhoneGroup, type NasiyaPhoneRow } from '../../api/nasiya';
 import { Button } from '../../components/ui/Button';
 import { Card, TableWrap } from '../../components/ui/Card';
+import { ChevronDownIcon, ChevronRightIcon } from '../../components/ui/icons';
 import { Select } from '../../components/ui/Input';
 import { SearchField } from '../../components/ui/SearchField';
 import { EmptyState, QueryView } from '../../components/ui/States';
@@ -45,7 +46,7 @@ export function NasiyaPhonesView() {
 function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day: string | null; historyStart: string | null }) {
   const [search, setSearch] = useState('');
   const [customer, setCustomer] = useState('');
-  const [limit, setLimit] = useState(PAGE);
+  const [closed, setClosed] = useState<Set<string>>(new Set());
   const [trailImei, setTrailImei] = useState<string | null>(null);
 
   const customers = useMemo(() => {
@@ -61,6 +62,27 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
         (!q || (r.imei ?? '').includes(q) || r.model.toLowerCase().includes(q)),
     );
   }, [rows, search, customer]);
+  const groups = useMemo(() => {
+    const byKey = new Map<string, CustomerGroup>();
+    for (const r of filtered) {
+      const key = String(r.customer?.id ?? r.sheet_name);
+      let g = byKey.get(key);
+      if (!g) {
+        g = { key, name: r.customer?.name ?? r.sheet_name, customerId: r.customer?.id ?? null, rows: [], debtQty: 0,
+          debtUsd: 0, qoldiqQty: 0, oldestDebt: null };
+        byKey.set(key, g);
+      }
+      g.rows.push(r);
+      if (r.kind === 'qoldiq') g.qoldiqQty += r.qty;
+      else {
+        g.debtQty += r.qty;
+        g.debtUsd += toNum(r.price_usd) * r.qty;
+        if (r.age_days !== null && (g.oldestDebt === null || r.age_days > (g.oldestDebt.age_days ?? -1))) g.oldestDebt = r;
+      }
+    }
+    return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [filtered]);
+  const allClosed = groups.length > 0 && groups.every((g) => closed.has(g.key));
   const qty = filtered.reduce((s, r) => s + r.qty, 0);
   const amount = filtered.reduce((s, r) => s + (r.kind === 'qoldiq' ? 0 : toNum(r.price_usd) * r.qty), 0);
   const over = (days: number) => filtered.filter((r) => (r.age_days ?? 0) > days).reduce((s, r) => s + r.qty, 0);
@@ -102,16 +124,97 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
           <span className={`rounded-full px-1.5 text-[11px] ${debtAgeClass(5)}`}>5 kundan</span>
         </span>
       </div>
-      {filtered.length === 0 ? (
+      {groups.length === 0 ? (
         <EmptyState title="Topilmadi" />
       ) : (
+        <>
+          <div className="flex justify-end px-4 pb-2 sm:px-5">
+            <Button size="sm" variant="ghost" onClick={() => setClosed(allClosed ? new Set() : new Set(groups.map((g) => g.key)))}>
+              {allClosed ? 'Hammasini ochish' : "Hammasini yig'ish"}
+            </Button>
+          </div>
+          <div className="space-y-3 px-4 pb-4 sm:px-5">
+            {groups.map((g) => (
+              <CustomerPhones
+                key={g.key}
+                group={g}
+                open={!closed.has(g.key)}
+                onToggle={() =>
+                  setClosed((s) => {
+                    const next = new Set(s);
+                    if (next.has(g.key)) next.delete(g.key);
+                    else next.add(g.key);
+                    return next;
+                  })
+                }
+                onImei={setTrailImei}
+              />
+            ))}
+          </div>
+        </>
+      )}
+      {trailImei && <ImeiTrailModal imei={trailImei} onClose={() => setTrailImei(null)} />}
+    </Card>
+  );
+}
+
+type CustomerGroup = {
+  key: string;
+  name: string;
+  customerId: number | null;
+  rows: NasiyaPhoneRow[];
+  debtQty: number;
+  debtUsd: number;
+  qoldiqQty: number;
+  oldestDebt: NasiyaPhoneRow | null;
+};
+
+/** One customer's phones in their own block: totals and the oldest nasiya in the header, oldest phone first. */
+function CustomerPhones({
+  group: g,
+  open,
+  onToggle,
+  onImei,
+}: {
+  group: CustomerGroup;
+  open: boolean;
+  onToggle: () => void;
+  onImei: (imei: string) => void;
+}) {
+  const [limit, setLimit] = useState(PAGE);
+  return (
+    <div className="overflow-hidden rounded-xl ring-1 ring-slate-200 dark:ring-white/10">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 bg-slate-50 px-3 py-2.5 text-[13px] dark:bg-white/5">
+        <button type="button" onClick={onToggle} className="flex items-center gap-1.5 font-semibold text-slate-900">
+          {open ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+          {g.name}
+        </button>
+        {g.customerId !== null && (
+          <Link to={`/nasiya/customers/${g.customerId}`} className="text-[12px] text-primary-700 hover:underline">
+            mijoz sahifasi
+          </Link>
+        )}
+        <span className="text-slate-600">
+          Nasiya: <span className="font-medium text-slate-900">{fmtQty(g.debtQty)} dona</span>
+          {g.debtUsd > 0 && <> · {fmtUsd(g.debtUsd, { symbol: true, decimals: 0 })}</>}
+        </span>
+        <span className="text-slate-600">
+          Qoldiq: <span className="font-medium text-slate-900">{fmtQty(g.qoldiqQty)} dona</span>
+        </span>
+        {g.oldestDebt && (
+          <span className="flex items-center gap-1.5 text-slate-600">
+            Eng uzoq nasiya:
+            <AgeBadge days={g.oldestDebt.age_days} exact={g.oldestDebt.since_exact} overdue={g.oldestDebt.overdue} kind="nasiya" />
+          </span>
+        )}
+      </div>
+      {open && (
         <TableWrap>
           <table className="tbl">
             <thead>
               <tr>
                 <th>Necha kun</th>
                 <th>Qachondan</th>
-                <th>Mijoz</th>
                 <th>Holati</th>
                 <th>Model</th>
                 <th>IMEI</th>
@@ -120,28 +223,19 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
               </tr>
             </thead>
             <tbody>
-              {filtered.slice(0, limit).map((r, i) => (
+              {g.rows.slice(0, limit).map((r, i) => (
                 <tr key={`${r.imei ?? r.model}-${i}`}>
                   <td>
                     <AgeBadge days={r.age_days} exact={r.since_exact} overdue={r.overdue} kind={r.kind} />
                   </td>
                   <td className="whitespace-nowrap text-slate-500">{r.since ? fmtDate(r.since) : '—'}</td>
-                  <td className="whitespace-nowrap">
-                    {r.customer ? (
-                      <Link to={`/nasiya/customers/${r.customer.id}`} className="text-primary-700 hover:underline">
-                        {r.customer.name}
-                      </Link>
-                    ) : (
-                      r.sheet_name
-                    )}
-                  </td>
                   <td>
                     <KindBadge kind={r.kind} />
                   </td>
                   <td className="whitespace-nowrap">{r.model}</td>
                   <td className="whitespace-nowrap tabular-nums">
                     {r.imei ? (
-                      <button type="button" className="text-primary-700 hover:underline" onClick={() => setTrailImei(r.imei)}>
+                      <button type="button" className="text-primary-700 hover:underline" onClick={() => onImei(r.imei!)}>
                         {r.imei}
                       </button>
                     ) : (
@@ -156,14 +250,13 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
           </table>
         </TableWrap>
       )}
-      {filtered.length > limit && (
+      {open && g.rows.length > limit && (
         <div className="p-3 text-center">
           <Button size="sm" onClick={() => setLimit((n) => n + PAGE)}>
-            Yana {fmtQty(Math.min(PAGE, filtered.length - limit))} ta ko'rsatish ({fmtQty(filtered.length - limit)} qoldi)
+            Yana {fmtQty(Math.min(PAGE, g.rows.length - limit))} ta ko'rsatish ({fmtQty(g.rows.length - limit)} qoldi)
           </Button>
         </div>
       )}
-      {trailImei && <ImeiTrailModal imei={trailImei} onClose={() => setTrailImei(null)} />}
-    </Card>
+    </div>
   );
 }
