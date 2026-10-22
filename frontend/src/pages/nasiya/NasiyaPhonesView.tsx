@@ -52,7 +52,8 @@ type Totals = {
   sotuvQty: number;
   sotuvUsd: number;
   soldBack: number;
-  /** Nasiya exactly 2 days old / more than 2 days old: [qty, usd]. */
+  /** Nasiya given on this day / exactly 2 days old / more than 2 days old: [qty, usd]. */
+  newToday: [number, number];
   twoDays: [number, number];
   overTwo: [number, number];
 };
@@ -82,7 +83,15 @@ function addTo(t: Totals, r: NasiyaPhoneRow) {
   } else {
     t.debtQty += r.qty;
     t.debtUsd += amount;
-    const bucket = r.age_days === WATCH_DAY ? t.twoDays : r.age_days !== null && r.age_days > WATCH_DAY ? t.overTwo : null;
+    // day 1 at this customer in nasiya = given on this day (new, or sold on credit from qoldiq)
+    const bucket =
+      r.age_days === 1 && r.since_exact
+        ? t.newToday
+        : r.age_days === WATCH_DAY
+          ? t.twoDays
+          : r.age_days !== null && r.age_days > WATCH_DAY
+            ? t.overTwo
+            : null;
     if (bucket) {
       bucket[0] += r.qty;
       bucket[1] += amount;
@@ -98,21 +107,23 @@ const emptyTotals = (): Totals => ({
   sotuvQty: 0,
   sotuvUsd: 0,
   soldBack: 0,
+  newToday: [0, 0],
   twoDays: [0, 0],
   overTwo: [0, 0],
 });
 
 const money = (usd: number) => fmtUsd(usd, { symbol: true, decimals: 0 });
 
-/** The whole list: nasiya exactly 2 days old, and nasiya older than 2 days. */
+/** The whole list: nasiya given on this day, exactly 2 days old, and older than 2 days. */
 function DebtSummary({ t }: { t: Totals }) {
   if (t.debtQty === 0) return null;
   const tiles = [
+    { label: 'Yangi berilgan nasiya', v: t.newToday, tone: 'text-success-700', bar: 'bg-success-500' },
     { label: `${WATCH_DAY} kun bo'lgan nasiya`, v: t.twoDays, tone: 'text-slate-900', bar: 'bg-yellow-300' },
     { label: `${WATCH_DAY} kundan oshgan nasiya`, v: t.overTwo, tone: 'text-danger-700', bar: 'bg-danger-600' },
   ];
   return (
-    <div className="grid grid-cols-1 gap-2 px-4 pb-3 sm:grid-cols-2 sm:px-5">
+    <div className="grid grid-cols-1 gap-2 px-4 pb-3 sm:grid-cols-3 sm:px-5">
       {tiles.map((x) => (
         <div key={x.label} className="relative overflow-hidden rounded-xl bg-slate-50 px-4 py-3 dark:bg-white/5">
           <span className={`absolute inset-y-0 left-0 w-1 ${x.bar}`} />
@@ -125,11 +136,16 @@ function DebtSummary({ t }: { t: Totals }) {
   );
 }
 
-/** Under a customer's name: its nasiya exactly 2 days old and older than 2 days. */
+/** Under a customer's name: its nasiya given on this day, exactly 2 days old and older than 2 days. */
 function DebtSplit({ t }: { t: Totals }) {
-  if (t.twoDays[0] === 0 && t.overTwo[0] === 0) return null;
+  if (t.newToday[0] === 0 && t.twoDays[0] === 0 && t.overTwo[0] === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 pb-2.5 pl-10 text-[12px] sm:px-5 sm:pl-11">
+      {t.newToday[0] > 0 && (
+        <span className="rounded-full bg-success-50 px-2 py-0.5 font-medium text-success-700">
+          Yangi berilgan: {fmtQty(t.newToday[0])} dona · {money(t.newToday[1])}
+        </span>
+      )}
       {t.twoDays[0] > 0 && (
         <span className={`rounded-full px-2 py-0.5 font-medium ${debtAgeClass(0)}`}>
           {WATCH_DAY} kun bo'lgan: {fmtQty(t.twoDays[0])} dona · {money(t.twoDays[1])}
