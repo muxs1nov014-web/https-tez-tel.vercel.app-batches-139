@@ -52,14 +52,13 @@ type Totals = {
   sotuvQty: number;
   sotuvUsd: number;
   soldBack: number;
-  /** Nasiya up to 2 days / older than 2 days / without IMEI (no days): [qty, usd]. */
-  fresh: [number, number];
-  late: [number, number];
-  noAge: [number, number];
+  /** Nasiya exactly 2 days old / more than 2 days old: [qty, usd]. */
+  twoDays: [number, number];
+  overTwo: [number, number];
 };
 
-/** The 2-day line the business watches: up to 2 days is fine, older than 2 days needs a call. */
-const LATE_AFTER = 2;
+/** The day the business watches: phones exactly 2 days in nasiya, and those past it. */
+const WATCH_DAY = 2;
 
 /** Phones with the same state, model, days, price and term: one line with their IMEIs. */
 type Line = { key: string; first: NasiyaPhoneRow; qty: number; imeis: string[] };
@@ -83,9 +82,11 @@ function addTo(t: Totals, r: NasiyaPhoneRow) {
   } else {
     t.debtQty += r.qty;
     t.debtUsd += amount;
-    const bucket = r.age_days === null ? t.noAge : r.age_days > LATE_AFTER ? t.late : t.fresh;
-    bucket[0] += r.qty;
-    bucket[1] += amount;
+    const bucket = r.age_days === WATCH_DAY ? t.twoDays : r.age_days !== null && r.age_days > WATCH_DAY ? t.overTwo : null;
+    if (bucket) {
+      bucket[0] += r.qty;
+      bucket[1] += amount;
+    }
   }
   if (r.sold_on) t.soldBack += r.qty;
 }
@@ -97,53 +98,46 @@ const emptyTotals = (): Totals => ({
   sotuvQty: 0,
   sotuvUsd: 0,
   soldBack: 0,
-  fresh: [0, 0],
-  late: [0, 0],
-  noAge: [0, 0],
+  twoDays: [0, 0],
+  overTwo: [0, 0],
 });
 
 const money = (usd: number) => fmtUsd(usd, { symbol: true, decimals: 0 });
 
-/** The whole list: nasiya in total, up to 2 days and older than 2 days (the two add up to the total). */
+/** The whole list: nasiya exactly 2 days old, and nasiya older than 2 days. */
 function DebtSummary({ t }: { t: Totals }) {
   if (t.debtQty === 0) return null;
   const tiles = [
-    { label: 'Nasiya jami', v: [t.debtQty, t.debtUsd], tone: 'text-slate-900', bar: 'bg-slate-300' },
-    { label: `${LATE_AFTER} kungacha`, v: t.fresh, tone: 'text-slate-900', bar: 'bg-yellow-300' },
-    { label: `${LATE_AFTER} kundan o'tgan`, v: t.late, tone: 'text-danger-700', bar: 'bg-danger-600' },
+    { label: `${WATCH_DAY} kun bo'lgan nasiya`, v: t.twoDays, tone: 'text-slate-900', bar: 'bg-yellow-300' },
+    { label: `${WATCH_DAY} kundan oshgan nasiya`, v: t.overTwo, tone: 'text-danger-700', bar: 'bg-danger-600' },
   ];
   return (
-    <div className="px-4 pb-3 sm:px-5">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        {tiles.map((x) => (
-          <div key={x.label} className="relative overflow-hidden rounded-xl bg-slate-50 px-4 py-3 dark:bg-white/5">
-            <span className={`absolute inset-y-0 left-0 w-1 ${x.bar}`} />
-            <div className="text-[12px] text-slate-500">{x.label}</div>
-            <div className={`text-[20px] font-semibold tabular-nums ${x.tone}`}>{money(x.v[1])}</div>
-            <div className="text-[12px] text-slate-500">{fmtQty(x.v[0])} dona</div>
-          </div>
-        ))}
-      </div>
-      {t.noAge[0] > 0 && (
-        <p className="mt-1.5 text-[12px] text-slate-500">
-          {fmtQty(t.noAge[0])} dona IMEI'siz yozilgan — kuni noma'lum, jamiga kirgan.
-        </p>
-      )}
+    <div className="grid grid-cols-1 gap-2 px-4 pb-3 sm:grid-cols-2 sm:px-5">
+      {tiles.map((x) => (
+        <div key={x.label} className="relative overflow-hidden rounded-xl bg-slate-50 px-4 py-3 dark:bg-white/5">
+          <span className={`absolute inset-y-0 left-0 w-1 ${x.bar}`} />
+          <div className="text-[12px] text-slate-500">{x.label}</div>
+          <div className={`text-[20px] font-semibold tabular-nums ${x.tone}`}>{money(x.v[1])}</div>
+          <div className="text-[12px] text-slate-500">{fmtQty(x.v[0])} dona</div>
+        </div>
+      ))}
     </div>
   );
 }
 
-/** Under a customer's name: its nasiya up to 2 days and older than 2 days. */
+/** Under a customer's name: its nasiya exactly 2 days old and older than 2 days. */
 function DebtSplit({ t }: { t: Totals }) {
-  if (t.debtQty === 0) return null;
+  if (t.twoDays[0] === 0 && t.overTwo[0] === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 pb-2.5 pl-10 text-[12px] sm:px-5 sm:pl-11">
-      <span className={`rounded-full px-2 py-0.5 font-medium ${debtAgeClass(0)}`}>
-        {LATE_AFTER} kungacha: {fmtQty(t.fresh[0])} dona · {money(t.fresh[1])}
-      </span>
-      {t.late[0] > 0 && (
+      {t.twoDays[0] > 0 && (
+        <span className={`rounded-full px-2 py-0.5 font-medium ${debtAgeClass(0)}`}>
+          {WATCH_DAY} kun bo'lgan: {fmtQty(t.twoDays[0])} dona · {money(t.twoDays[1])}
+        </span>
+      )}
+      {t.overTwo[0] > 0 && (
         <span className={`rounded-full px-2 py-0.5 font-semibold ${debtAgeClass(5)}`}>
-          {LATE_AFTER} kundan o'tgan: {fmtQty(t.late[0])} dona · {money(t.late[1])}
+          {WATCH_DAY} kundan oshgan: {fmtQty(t.overTwo[0])} dona · {money(t.overTwo[1])}
         </span>
       )}
     </div>
