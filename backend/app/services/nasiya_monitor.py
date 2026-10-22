@@ -119,6 +119,7 @@ class Event:
     type: str
     row: Row  # the current row, or the previous one when the phone is gone
     previous: Row | None
+    sold_on: date | None = None  # 'reopened': the last earlier day the phone was in Sotuv (paid)
 
     @property
     def alert(self) -> bool:
@@ -139,12 +140,19 @@ def _by_imei(rows: list[Row]) -> dict[str, Row]:
     return out
 
 
-def compute_events(previous: list[Row], current: list[Row]) -> list[Event]:
+def compute_events(previous: list[Row], current: list[Row], sold: dict[str, date] | None = None) -> list[Event]:
+    """`sold`: IMEIs that were in Sotuv on some earlier confirmed day (and when). Such a phone back in debt or qoldiq
+    is "reopened" also when it was not in yesterday's file: a paid phone must not come back unnoticed."""
     prev, cur = _by_imei(previous), _by_imei(current)
+    sold = sold or {}
     events = []
     for imei in prev.keys() | cur.keys():
         p, c = prev.get(imei), cur.get(imei)
         pg, cg = (group_of(p.kind) if p else None), (group_of(c.kind) if c else None)
+        back = cg in ("debt", "qoldiq") and pg not in ("debt", "qoldiq") and (pg == "sotuv" or imei in sold)
+        if back:
+            events.append(Event("reopened", c, p, sold.get(imei)))
+            continue
         if p and c and p.customer_id != c.customer_id:
             events.append(Event("moved", c, p))
             continue
@@ -152,7 +160,6 @@ def compute_events(previous: list[Row], current: list[Row]) -> list[Event]:
             (None, "debt"): "new_debt", (None, "qoldiq"): "handover", (None, "sotuv"): "sold_direct",
             ("qoldiq", "debt"): "qoldiq_to_debt", ("qoldiq", "sotuv"): "sold_paid", ("qoldiq", None): "vanished_qoldiq",
             ("debt", "sotuv"): "paid", ("debt", None): "vanished_debt", ("debt", "qoldiq"): "debt_to_qoldiq",
-            ("sotuv", "debt"): "reopened", ("sotuv", "qoldiq"): "reopened", ("sotuv", "sotuv"): "reopened",
         }.get((pg, cg))
         if kind is None and pg == cg == "debt" and p.price != c.price:
             kind = "price_changed"
@@ -162,13 +169,31 @@ def compute_events(previous: list[Row], current: list[Row]) -> list[Event]:
     return events
 
 
+async def sold_before(session: AsyncSession, before: date, imeis) -> dict[str, date]:
+    """The last confirmed day before `before` on which each of these IMEIs was in Sotuv (paid)."""
+    imeis = {i for i in imeis if i}
+    if not imeis:
+        return {}
+    return dict((await session.execute(
+        select(NasiyaItem.imei, func.max(NasiyaReport.report_date))
+        .join(NasiyaReport, NasiyaReport.id == NasiyaItem.report_id)
+        .where(NasiyaReport.status == "confirmed", NasiyaReport.report_date < before, NasiyaItem.kind == "sotuv",
+               NasiyaItem.imei.in_(imeis))
+        .group_by(NasiyaItem.imei))).all())
+
+
+async def _day_events(session: AsyncSession, report: NasiyaReport, prev: NasiyaReport, rows: list[Row]) -> list[Event]:
+    back = [r.imei for r in rows if r.imei and group_of(r.kind) in ("debt", "qoldiq")]
+    return compute_events(await _rows(session, prev.id), rows, await sold_before(session, report.report_date, back))
+
+
 def _event_out(e: Event, customers: dict[int, Customer]) -> NasiyaEventOut:
     moved_from = e.previous.customer_id if e.type == "moved" and e.previous else None
     return NasiyaEventOut(
         type=e.type, alert=e.alert, customer=customer_ref(customers.get(e.row.customer_id)), sheet_name=e.row.sheet_name,
         other_customer=customer_ref(customers.get(moved_from)), model=e.row.model, imei=e.row.imei or "",
         price_usd=e.row.price if e.row.price is not None else (e.previous.price if e.previous else None),
-        previous_price_usd=e.previous.price if e.previous else None)
+        previous_price_usd=e.previous.price if e.previous else None, sold_on=e.sold_on)
 
 
 def _counts(events: list[Event]) -> list[NasiyaEventCount]:
@@ -185,7 +210,7 @@ async def diff_for_report(session: AsyncSession, report: NasiyaReport) -> Nasiya
     prev = await previous_confirmed(session, report.report_date)
     if prev is None:
         return None
-    events = compute_events(await _rows(session, prev.id), await _rows(session, report.id))
+    events = await _day_events(session, report, prev, await _rows(session, report.id))
     customers = await _customers(session, [e.row.customer_id for e in events]
                                  + [e.previous.customer_id for e in events if e.previous])
     return NasiyaDiffOut(previous_report_id=prev.id, previous_date=prev.report_date, counts=_counts(events),
@@ -291,7 +316,7 @@ async def _load_day(session: AsyncSession, report: NasiyaReport) -> _Day:
     rows = await _rows(session, report.id)
     since = await _since(session, report, rows)
     prev = await previous_confirmed(session, report.report_date)
-    events = compute_events(await _rows(session, prev.id), rows) if prev else []
+    events = await _day_events(session, report, prev, rows) if prev else []
     return _Day(report, rows, await _sheets(session, report.id), since, _ages(report, since), prev, events)
 
 
@@ -413,19 +438,23 @@ def _phone_item(day: "_Day", r: Row) -> dict:
 
 async def phones(session: AsyncSession, group: str | None = None, customer_id: int | None = None,
                  on: date | None = None) -> NasiyaPhonesOut:
-    """Every phone of the latest confirmed day (nasiya + variant and qoldiq by default) with how long it has been in
-    that state at that customer, oldest first."""
+    """Every phone of the latest confirmed day (all kinds by default): nasiya + variant first, then qoldiq, each oldest
+    first, then sotuv. A debt or qoldiq phone that was in Sotuv on an earlier day carries that day (`sold_on`)."""
     report = await latest_confirmed(session, on)
     if report is None:
         return NasiyaPhonesOut(report=None, history_start=None, rows=[])
     day = await _load_day(session, report)
-    kinds = PHONE_GROUPS[group] if group else DEBT_KINDS + ("qoldiq",)
+    kinds = PHONE_GROUPS[group] if group else DEBT_KINDS + ("qoldiq", "sotuv")
     rows = [r for r in day.rows if r.kind in kinds and (customer_id is None or r.customer_id == customer_id)]
     customers = await _customers(session, [r.customer_id for r in rows])
+    sold = await sold_before(session, report.report_date,
+                             [r.imei for r in rows if r.imei and group_of(r.kind) in ("debt", "qoldiq")])
     out = [NasiyaPhoneRow(**_phone_item(day, r), customer=customer_ref(customers.get(r.customer_id)),
-                          sheet_name=r.sheet_name) for r in rows]
-    out.sort(key=lambda p: (-(p.age_days if p.age_days is not None else -1), p.customer.name if p.customer else "",
-                            p.model, p.imei or ""))
+                          sheet_name=r.sheet_name,
+                          sold_on=sold.get(r.imei) if r.imei and r.kind != "sotuv" else None) for r in rows]
+    order = {"debt": 0, "qoldiq": 1, "sotuv": 2}
+    out.sort(key=lambda p: (order[group_of(p.kind)], -(p.age_days if p.age_days is not None else -1),
+                            p.customer.name if p.customer else "", p.model, p.imei or ""))
     return NasiyaPhonesOut(report=(await nasiya_reports.summaries(session, [report]))[0],
                            history_start=await _history_start(session), rows=out)
 

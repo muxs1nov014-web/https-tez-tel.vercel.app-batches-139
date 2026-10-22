@@ -611,8 +611,14 @@ panel and then monitored day to day.
   available (limit − debt − qoldiq value), over_limit, the sheet's own Nasiya figure (shown red when it differs from
   the IMEI sum) and the panel ledger debt (§12) for reconciliation. The workbook does not write into the §12 ledger.
 - Phones (`GET /nasiya/phones?group=debt|qoldiq|sotuv&customer_id=&on=`, viewer): every phone of the latest confirmed
-  day (default nasiya + variant + qoldiq) with customer, model, IMEI, price, since, age and term, oldest first; the
-  panel's "Telefonlar (kunlar)" tab, and the bot's reply to a forwarded file lists the 5 oldest of each.
+  day (default all kinds) with customer, model, IMEI, price, since, age and term: nasiya + variant first, then qoldiq,
+  each oldest first, then sotuv (no age). A debt or qoldiq phone that was in Sotuv on an earlier confirmed day carries
+  `sold_on`. The panel's "Telefonlar (kunlar)" tab shows one line per customer (totals, oldest nasiya); opened, phones
+  of the same state, model, days and price share a line with their IMEIs. The bot's reply to a forwarded file lists
+  the 5 oldest of each.
+- A sold phone back: `reopened` (alert) when a phone in debt or qoldiq was in Sotuv on any earlier confirmed day and
+  was not in debt or qoldiq the day before (also after a gap; the event carries `sold_on`). The bot's reply lists them
+  ("🚨 Sotilgan telefon qaytib chiqdi"). A phone in Sotuv two days running is not an alert (months count it once).
 - Months (`GET /nasiya/months?count=&customer_id=`): per month of confirmed days — Sotuv (phones in the Sotuv column,
   each IMEI once on its first day there; a row without IMEI on every day listed), new debt (IMEIs in debt that were not
   in debt the confirmed day before; for one customer, also those moved in from another customer), and debt and qoldiq

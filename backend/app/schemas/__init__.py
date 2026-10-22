@@ -832,6 +832,7 @@ class NasiyaEventOut(BaseModel):
     imei: str
     price_usd: Num | None
     previous_price_usd: Num | None
+    sold_on: date | None = None  # 'reopened': the last earlier day it was in Sotuv (paid)
 
 
 class NasiyaEventCount(BaseModel):
@@ -1017,6 +1018,7 @@ class NasiyaDebtItemOut(BaseModel):
 class NasiyaPhoneRow(NasiyaDebtItemOut):
     customer: CustomerRef | None
     sheet_name: str
+    sold_on: date | None = None  # in debt or qoldiq although it was in Sotuv (paid) on this earlier day
 
 
 class NasiyaPhonesOut(BaseModel):

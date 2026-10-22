@@ -414,15 +414,35 @@ async def test_phones_lists_every_nasiya_and_qoldiq_imei_with_its_days(client, o
     data = r.json()
     assert data["report"]["report_date"] == "2026-10-15" and data["history_start"] == "2026-10-14"
     by_imei = {p["imei"]: p for p in data["rows"]}
-    assert set(by_imei) == {imei(3), imei(4), imei(8), imei(5), imei(7), imei(6)}  # no sotuv by default
+    assert set(by_imei) == {imei(3), imei(4), imei(8), imei(5), imei(7), imei(6), imei(1)}
     # imei 3: nasiya at Ali since the first day (a lower bound); imei 8: new today; imei 5: qoldiq since day 1
     assert (by_imei[imei(3)]["age_days"], by_imei[imei(3)]["since"], by_imei[imei(3)]["since_exact"]) == (
         2, "2026-10-14", False)
     assert (by_imei[imei(8)]["age_days"], by_imei[imei(8)]["since_exact"], by_imei[imei(8)]["customer"]["name"]) == (
         1, True, "Ali aka")
     assert by_imei[imei(5)]["kind"] == "qoldiq" and by_imei[imei(5)]["age_days"] == 2
-    ages = [p["age_days"] for p in data["rows"]]
-    assert ages == sorted(ages, reverse=True)  # oldest first
+    # nasiya first, then qoldiq, each oldest first, then sotuv (no days)
+    order = {"nasiya": 0, "variant": 0, "qoldiq": 1, "sotuv": 2}
+    keys = [(order[p["kind"]], -(p["age_days"] or 0)) for p in data["rows"]]
+    assert keys == sorted(keys) and data["rows"][-1]["imei"] == imei(1) and data["rows"][-1]["age_days"] is None
     qoldiq = (await client.get(f"/api/nasiya/phones?group=qoldiq&customer_id={customers['Vali aka']}",
                                headers=viewer_h)).json()["rows"]
     assert [p["imei"] for p in qoldiq] == [imei(6)]
+
+
+async def test_a_sold_phone_that_comes_back_is_an_alert_even_after_a_gap(client, operator_h, viewer_h):
+    customers, d1, d2 = await _setup_two_days(client, operator_h)
+    await _confirm(client, operator_h, d2["id"])
+    day3 = {"Ali aka": DAY2["Ali aka"][1:], "Vali aka": DAY2["Vali aka"]}  # imei 1 (sold 15.10) is gone
+    up3 = await _upload(client, operator_h, workbook("16,10,2026", day3), "nazorat_16.10.2026.xlsx")
+    await _confirm(client, operator_h, (await _link_all(client, operator_h, await _detail(
+        client, operator_h, up3["report_id"]), customers))["id"])
+    day4 = {"Ali aka": day3["Ali aka"], "Vali aka": [["Qoldiq", "15 blue 128", int(imei(6)), 1, "17 max 256", int(imei(1)), 1]]}
+    up4 = await _upload(client, operator_h, workbook("17,10,2026", day4), "nazorat_17.10.2026.xlsx")
+    d4 = await _link_all(client, operator_h, await _detail(client, operator_h, up4["report_id"]), customers)
+    [back] = [e for e in d4["diff"]["events"] if e["type"] == "reopened"]
+    assert (back["imei"], back["alert"], back["customer"]["name"], back["sold_on"]) == (
+        imei(1), True, "Vali aka", "2026-10-15")
+    await _confirm(client, operator_h, d4["id"])
+    rows = (await client.get("/api/nasiya/phones", headers=viewer_h)).json()["rows"]
+    assert {p["imei"]: p["sold_on"] for p in rows if p["sold_on"]} == {imei(1): "2026-10-15"}

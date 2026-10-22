@@ -65,6 +65,7 @@ async def summary_text(session, report: NasiyaReport, counted: bool, duplicate: 
             lines.append(f"… yana {len(issues) - MAX_ISSUES_SHOWN} ta — panelda.")
     if report.status == "confirmed":
         lines.append("\n✅ Hisoblandi." if counted else "\n✅ Bu kun hisobga olingan.")
+        lines.extend(await _reopened_lines(session, report))
         lines.extend(await _oldest_lines(session, report))
     elif report.status == "invalid":
         lines.append("\n❌ Bu nasiya fayli emas.")
@@ -77,6 +78,22 @@ async def summary_text(session, report: NasiyaReport, counted: bool, duplicate: 
         else:
             lines.append("\n⏳ Kutmoqda: shu kun uchun keyingi fayl allaqachon hisoblangan.")
     return "\n".join(lines)
+
+
+async def _reopened_lines(session, report: NasiyaReport) -> list[str]:
+    """Phones that were sold (Sotuv, paid) on an earlier day and are back in nasiya or qoldiq: checked by IMEI."""
+    diff = await nasiya_monitor.diff_for_report(session, report)
+    back = [e for e in diff.events if e.type == "reopened"] if diff else []
+    if not back:
+        return []
+    lines = [f"\n🚨 Sotilgan telefon qaytib chiqdi — {len(back)} ta, IMEI'ni tekshiring:"]
+    for e in back[:MAX_ISSUES_SHOWN]:
+        who = e.customer.name if e.customer else e.sheet_name
+        when = f" (sotilgan {e.sold_on:%d.%m})" if e.sold_on else ""
+        lines.append(f"– {who} · {e.model} · {e.imei}{when}")
+    if len(back) > MAX_ISSUES_SHOWN:
+        lines.append(f"… yana {len(back) - MAX_ISSUES_SHOWN} ta — panelda.")
+    return lines
 
 
 def _debt_mark(days: int) -> str:

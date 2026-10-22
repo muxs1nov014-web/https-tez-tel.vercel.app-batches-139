@@ -125,6 +125,8 @@ export interface NasiyaEvent {
   imei: string;
   price_usd: Num | null;
   previous_price_usd: Num | null;
+  /** 'reopened': the last earlier day the phone was in Sotuv (paid). */
+  sold_on: ISODate | null;
 }
 
 export interface NasiyaEventCount {
@@ -234,6 +236,8 @@ export interface NasiyaPhone {
 export interface NasiyaPhoneRow extends NasiyaPhone {
   customer: CustomerRef | null;
   sheet_name: string;
+  /** In nasiya or qoldiq although it was in Sotuv (paid) on this earlier day. */
+  sold_on: ISODate | null;
 }
 
 export interface NasiyaPhones {

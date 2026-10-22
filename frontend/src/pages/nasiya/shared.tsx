@@ -70,7 +70,7 @@ export const EVENT_HINTS: Partial<Record<NasiyaEventType, string>> = {
   debt_to_qoldiq: 'Nasiyadagi telefon yana qoldiqqa yozilgan.',
   moved: 'Bir mijozdan boshqasiga o\'tgan.',
   price_changed: "Nasiyadagi telefonning narxi kechagidan farq qiladi.",
-  reopened: "Kecha «Sotuv» (to'langan) edi, bugun yana nasiya yoki qoldiqda.",
+  reopened: "Avval «Sotuv»da (to'langan) bo'lgan telefon yana nasiya yoki qoldiqda chiqdi. IMEI'ni tekshiring.",
 };
 
 export function StatusBadge({ status }: { status: NasiyaStatus }) {

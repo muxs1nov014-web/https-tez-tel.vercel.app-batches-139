@@ -501,6 +501,7 @@ export function EventsTable({ events, onImei }: { events: NasiyaEvent[]; onImei:
               <td className="whitespace-nowrap">
                 {e.customer?.name ?? e.sheet_name}
                 {e.other_customer && <div className="text-[11px] text-slate-500">oldin: {e.other_customer.name}</div>}
+                {e.sold_on && <div className="text-[11px] text-danger-600">sotilgan: {fmtDate(e.sold_on)}</div>}
               </td>
               <td>{e.model}</td>
               <td className="whitespace-nowrap tabular-nums">
