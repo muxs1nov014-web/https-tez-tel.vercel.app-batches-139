@@ -111,19 +111,25 @@ function overTwo(t: Totals): [number, number] {
   return t.bands.slice(1).reduce<[number, number]>((s, [q, u]) => [s[0] + q, s[1] + u], [0, 0]);
 }
 
-/** The whole list: nasiya per day band in its colour, and everything older than 2 days together. */
-function AgeBands({ t }: { t: Totals }) {
+/** Nasiya per day band in its colour, and everything older than 2 days together: for the whole list, and for each
+ *  customer on its own under its name. */
+function AgeBands({ t, small = false }: { t: Totals; small?: boolean }) {
   if (t.debtQty === 0) return null;
   const [lateQty, lateUsd] = overTwo(t);
+  const chip = small ? 'rounded-full px-2 py-0.5' : 'rounded-full px-2.5 py-1';
   return (
-    <div className="flex flex-wrap items-center gap-2 px-4 pb-3 text-[13px] sm:px-5">
-      <span className="text-slate-600">Nasiya kunlari:</span>
-      {AGE_BANDS.map((b, i) => (
-        <span key={b.label} className={`rounded-full px-2.5 py-1 font-medium ${debtAgeClass(b.sample)}`}>
-          {b.label}: {fmtQty(t.bands[i][0])} dona · {money(t.bands[i][1])}
-        </span>
-      ))}
-      <span className="rounded-full px-2.5 py-1 font-semibold text-danger-700 ring-1 ring-danger-200">
+    <div
+      className={`flex flex-wrap items-center gap-2 px-4 sm:px-5 ${small ? 'pb-2.5 pl-10 text-[12px] sm:pl-11' : 'pb-3 text-[13px]'}`}
+    >
+      {!small && <span className="text-slate-600">Nasiya kunlari:</span>}
+      {AGE_BANDS.map((b, i) =>
+        small && t.bands[i][0] === 0 ? null : (
+          <span key={b.label} className={`${chip} font-medium ${debtAgeClass(b.sample)}`}>
+            {b.label}: {fmtQty(t.bands[i][0])} dona · {money(t.bands[i][1])}
+          </span>
+        ),
+      )}
+      <span className={`${chip} font-semibold text-danger-700 ring-1 ring-danger-200`}>
         2 kundan ko'p jami: {fmtQty(lateQty)} dona · {money(lateUsd)}
       </span>
     </div>
@@ -234,20 +240,13 @@ function PhonesTable({ rows, day, historyStart }: { rows: NasiyaPhoneRow[]; day:
   );
 }
 
-function TotalsLine({ t, perCustomer = false }: { t: Totals; perCustomer?: boolean }) {
-  const [lateQty, lateUsd] = overTwo(t);
+function TotalsLine({ t }: { t: Totals }) {
   return (
     <>
       {t.debtQty > 0 && (
         <span>
           Nasiya <span className="font-medium text-slate-900">{fmtQty(t.debtQty)}</span> ·{' '}
           <span className="font-medium text-slate-900">{money(t.debtUsd)}</span>
-        </span>
-      )}
-      {perCustomer && t.debtQty > 0 && (
-        <span className={lateQty > 0 ? 'text-danger-700' : 'text-slate-500'}>
-          2 kundan ko'p: <span className="font-semibold">{fmtQty(lateQty)}</span>
-          {lateQty > 0 && <> · <span className="font-semibold">{money(lateUsd)}</span></>}
         </span>
       )}
       {t.qoldiqQty > 0 && (
@@ -292,13 +291,14 @@ function CustomerPhones({
         {g.oldestDebt && (
           <AgeBadge days={g.oldestDebt.age_days} exact={g.oldestDebt.since_exact} overdue={g.oldestDebt.overdue} kind="nasiya" />
         )}
-        <TotalsLine t={g} perCustomer />
+        <TotalsLine t={g} />
         {g.customerId !== null && (
           <Link to={`/nasiya/customers/${g.customerId}`} className="ml-auto text-[12px] text-primary-700 hover:underline">
             Mijoz sahifasi →
           </Link>
         )}
       </div>
+      <AgeBands t={g} small />
       {open && (
         <TableWrap className="mx-4 mb-3 sm:mx-5">
           <table className="tbl">
