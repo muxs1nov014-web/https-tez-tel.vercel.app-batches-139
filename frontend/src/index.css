@@ -137,6 +137,19 @@
     font-feature-settings: 'cv11', 'ss01', 'ss03';
     letter-spacing: -0.01em;
   }
+  /* Opened from the home screen: the status bar (clock, battery) sits over the page with white text
+     (black-translucent), so a black strip keeps it black and readable in both themes. */
+  @media (display-mode: standalone) {
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: env(safe-area-inset-top);
+      background: #000;
+      z-index: 9999;
+      pointer-events: none;
+    }
+  }
   /* macOS pop-up button: up/down chevrons instead of the native arrow. */
   select {
     appearance: none;
