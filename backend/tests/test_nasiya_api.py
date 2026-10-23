@@ -517,3 +517,23 @@ async def test_a_date_marker_reaches_only_before_the_history(client, operator_h,
     by_imei = {p["imei"]: (p["since"], p["age_days"], p["since_exact"]) for p in rows}
     assert by_imei[imei(3)] == ("2026-10-13", 3, True)
     assert by_imei[imei(4)] == ("2026-10-15", 1, True)
+
+
+async def test_the_same_file_sent_again_shows_the_errors_read_anew(session):
+    """A file stored under an older parser (a written count that differs from the IMEIs was an error then) is
+    reread when it is sent again: the stored errors follow the parser, the counted phones stay."""
+    from app.models import NasiyaSheet
+    from app.services import nasiya_reports
+
+    content = workbook("14,10,2026", {"Ali aka": [["Nasiya", "17 max 256 3 ta", imei(1), imei(2), 1500]]})
+    report, created = await nasiya_reports.ingest(session, content, file_name="a.xlsx", source="upload")
+    assert created and report.error_count == 0 and report.item_count == 2
+    sheet = (await session.execute(select(NasiyaSheet).where(NasiyaSheet.report_id == report.id))).scalar_one()
+    sheet.issues = [{"level": "error", "code": "count_mismatch", "message": "eski", "cell": "A2"}]
+    sheet.error_count, report.error_count = 1, 1
+    await session.flush()
+
+    again, created = await nasiya_reports.ingest(session, content, file_name="a.xlsx", source="upload")
+    assert not created and again.id == report.id
+    assert (again.error_count, again.item_count, sheet.error_count) == (0, 2, 0)
+    assert [i["level"] for i in sheet.issues] == ["warning"]

@@ -64,6 +64,7 @@ async def ingest(session: AsyncSession, content: bytes, *, file_name: str, sourc
     sha = hashlib.sha256(content).hexdigest()
     existing = (await session.execute(select(NasiyaReport).where(NasiyaReport.file_sha256 == sha))).scalar_one_or_none()
     if existing is not None:
+        await _refresh_issues(session, existing, content, fallback_date)
         return existing, False
     report = NasiyaReport(source=source, file_name=(file_name or "")[:255], file_sha256=sha, file_size=len(content),
                           telegram_message_id=telegram_message_id, chat_title=chat_title[:255], sent_by=sent_by[:255],
@@ -109,6 +110,38 @@ async def ingest(session: AsyncSession, content: bytes, *, file_name: str, sourc
     session.add(report)
     await session.flush()
     return report, True
+
+
+async def _refresh_issues(session: AsyncSession, report: NasiyaReport, content: bytes,
+                          fallback_date: date | None) -> None:
+    """The same file sent again: its errors and warnings are read anew, so a parser fix shows on the stored report
+    (the items, already counted, stay as they are)."""
+    if report.status == "invalid":
+        return
+    rows = list((await session.execute(select(NasiyaSheet).where(NasiyaSheet.report_id == report.id)
+                                       .order_by(NasiyaSheet.position))).scalars())
+    if not rows:
+        return
+    try:
+        parsed = nasiya_workbook.parse_workbook(content, report.file_name, fallback_date or report.report_date)
+    except ValidationFailed:
+        return
+    if [s.name[:128] for s in parsed.sheets] != [r.name for r in rows]:
+        return
+    workbook_issues = list(parsed.issues)
+    if report.report_date is None:
+        workbook_issues.append(ns.Issue("error", "no_date", "Hisobot sanasi topilmadi (varaqlarda ham, fayl nomida ham)"))
+    report.issues = _issue_dicts(workbook_issues)
+    errors = sum(i.level == "error" for i in workbook_issues)
+    warnings = sum(i.level == "warning" for i in workbook_issues)
+    for row, sheet in zip(rows, parsed.sheets):
+        row.issues = _issue_dicts(sheet.issues)
+        row.error_count = sum(i.level == "error" for i in sheet.issues)
+        row.warning_count = sum(i.level == "warning" for i in sheet.issues)
+        errors += row.error_count
+        warnings += row.warning_count
+    report.error_count, report.warning_count = errors, warnings
+    await session.flush()
 
 
 async def _links(session: AsyncSession) -> dict[str, int]:
