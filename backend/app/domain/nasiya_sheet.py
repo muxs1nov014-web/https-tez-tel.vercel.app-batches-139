@@ -356,8 +356,9 @@ class _Column:
                        f"'{self.model}': {n_imei} ta IMEI, narx {price} soni ko'rsatilmagan — har biriga {price} deb olindi",
                        cell)
         elif n_imei and count != n_imei:
-            self.issue("error", "count_mismatch",
-                       f"'{self.model}': yozilgan son {count}, IMEI esa {n_imei} ta", cell)
+            # the phones are the IMEIs, counted one by one; the written count is only a note (client request)
+            self.issue("warning", "count_mismatch",
+                       f"'{self.model}': IMEI bo'yicha {n_imei} ta sanaldi (yozilgan son {count})", cell)
         if price is not None and price < PRICE_MIN:
             self.issue("warning", "price_low", f"'{self.model}': narx {price} juda past", cell)
         self._emit(price, qty_without_imei=count if n_imei == 0 else 0)

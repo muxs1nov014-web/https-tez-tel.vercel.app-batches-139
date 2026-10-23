@@ -24,7 +24,6 @@ log = logging.getLogger(__name__)
 router = Router(name="nasiya_upload")
 REVIEW_ROLES = ("operator", "admin")
 MAX_ISSUES_SHOWN = 8
-OLDEST_SHOWN = 5
 
 
 async def _operator(session, telegram_id: int) -> User | None:
@@ -66,7 +65,7 @@ async def summary_text(session, report: NasiyaReport, counted: bool, duplicate: 
     if report.status == "confirmed":
         lines.append("\n✅ Hisoblandi." if counted else "\n✅ Bu kun hisobga olingan.")
         lines.extend(await _reopened_lines(session, report))
-        lines.extend(await _oldest_lines(session, report))
+        lines.extend(await _debt_lines(session, report))
     elif report.status == "invalid":
         lines.append("\n❌ Bu nasiya fayli emas.")
     else:
@@ -96,28 +95,43 @@ async def _reopened_lines(session, report: NasiyaReport) -> list[str]:
     return lines
 
 
-def _debt_mark(days: int) -> str:
-    """The panel's nasiya colours: yellow up to 2 days, light red up to 5, dark red from 5."""
-    return "🔴" if days >= 5 else "🟠" if days > 2 else "🟡"
+WATCH_DAY = 2  # the panel's split: nasiya given today, exactly 2 days old, older than 2 days
 
 
-async def _oldest_lines(session, report: NasiyaReport) -> list[str]:
-    """The phones that have been longest in nasiya and in qoldiq on this day ("≥" when history starts there)."""
-    lines = []
-    for group, title in (("debt", "Eng uzoq nasiyada"), ("qoldiq", "Eng uzoq qoldiqda")):
-        data = await nasiya_monitor.phones(session, group, on=report.report_date)
-        if data.report is None or data.report.id != report.id:
-            return []
-        rows = [p for p in data.rows if p.age_days is not None][:OLDEST_SHOWN]
-        if not rows:
-            continue
-        lines.append(f"\n⏱ {title}:")
-        for p in rows:
-            days = f"{'' if p.since_exact else '≥'}{p.age_days} kun"
-            who = p.customer.name if p.customer else p.sheet_name
-            lines.append(f"{_debt_mark(p.age_days) if group == 'debt' else '–'} {days} · {who} · {p.model} · {p.imei or '—'}")
-    if lines:
-        lines.append("Hammasi: Panel → Nasiya nazorati → Telefonlar.")
+def _bands(rows) -> tuple[list, list, list]:
+    """[qty, usd] for: given today, 2 days old, over 2 days (as the panel's Telefonlar tab)."""
+    new, two, over = [0, 0], [0, 0], [0, 0]
+    for p in rows:
+        band = (new if p.age_days == 1 and p.since_exact else two if p.age_days == WATCH_DAY
+                else over if p.age_days and p.age_days > WATCH_DAY else None)
+        if band is not None:
+            band[0] += p.qty
+            band[1] += (p.price_usd or 0) * p.qty
+    return new, two, over
+
+
+def _band(mark: str, label: str, band: list) -> str:
+    return f"{mark} {label}: {band[0]} ta · {_money(band[1])}"
+
+
+async def _debt_lines(session, report: NasiyaReport) -> list[str]:
+    """Nasiya by days, in total and for each customer: given today, 2 days, over 2 days."""
+    data = await nasiya_monitor.phones(session, "debt", on=report.report_date)
+    if data.report is None or data.report.id != report.id or not data.rows:
+        return []
+    new, two, over = _bands(data.rows)
+    lines = ["\n📊 Nasiya kunlar bo'yicha:", _band("🟢", "Yangi berilgan", new),
+             _band("🟡", "2 kun bo'lgan", two), _band("🔴", "2 kundan oshgan", over)]
+    by_customer: dict[str, list] = {}
+    for p in data.rows:
+        by_customer.setdefault(p.customer.name if p.customer else p.sheet_name, []).append(p)
+    lines.append("\n👤 Mijozlar:")
+    for name, rows in by_customer.items():
+        parts = [f"{mark} {band[0]} ta {_money(band[1])}"
+                 for mark, band in zip(("🟢", "🟡", "🔴"), _bands(rows)) if band[0]]
+        if parts:
+            lines.append(f"• {name}: " + " · ".join(parts))
+    lines.append("Hammasi: Panel → Nasiya nazorati → Telefonlar.")
     return lines
 
 

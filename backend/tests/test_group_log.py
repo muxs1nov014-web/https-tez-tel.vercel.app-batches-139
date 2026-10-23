@@ -154,7 +154,7 @@ async def test_a_nasiya_workbook_sent_to_the_bot_is_counted_and_summarised(sessi
     [call] = bot.session.calls
     assert isinstance(call, SendMessage) and call.chat_id == ALI.id
     assert "14.10.2026" in call.text and "• Nasiya: 3 dona, 3 460 $" in call.text and "✅ Hisoblandi." in call.text
-    assert "⏱ Eng uzoq nasiyada:" in call.text and "🟡 ≥1 kun · Ali aka · 17 max 256" in call.text
+    assert "📊 Nasiya kunlar bo'yicha:" in call.text and "👤 Mijozlar:" in call.text
     report = (await session.execute(select(NasiyaReport))).scalar_one()
     assert (report.status, report.review_note) == ("confirmed", "Avtomatik: xatosiz")
 

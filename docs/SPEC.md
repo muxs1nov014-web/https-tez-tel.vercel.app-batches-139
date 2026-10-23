@@ -541,10 +541,11 @@ panel and then monitored day to day.
   non-sotuv column is only the day's note.
 - The summary panel (a label column with `Limit` / `Berish mumkin`, values to its right) is read into
   `summary`: variant, nasiya, qoldiq, jami, limit, available, and the variant payment `schedule` (`31.10.2026 | 159500`).
-- Issues. Errors (block confirmation): `count_mismatch`, `price_missing`, `imei_invalid` (length or Luhn check digit),
+- Issues. Errors (block confirmation): `price_missing`, `imei_invalid` (length or Luhn check digit),
   `imei_duplicate` (in a sheet), `imei_cross_sheet` (one phone at two customers), `imei_without_model`,
   `unknown_column`, `kind_conflict` (header `Sotuv`, footer `Nasiyada 20 ta`: the header decides, a person checks),
-  `data_after_footer`, `no_date`, `unreadable`. Warnings: `declared_qty`, `declared_amount`, `empty_block`,
+  `data_after_footer`, `no_date`, `unreadable`. Warnings: `count_mismatch` (a block's written count differs from its IMEIs: the IMEIs are
+  counted one by one), `declared_qty`, `declared_amount`, `empty_block`,
   `stray_number`, `price_low`, `price_without_count`, `header_inherited`. Nothing is dropped silently: a phone without
   a price is kept with `price_usd = null`.
 - Report date: the date most sheets carry (a shop sheet updated weekly does not decide it), else the file name, else

@@ -61,7 +61,7 @@ def test_a_clean_sheet_becomes_imei_level_items():
     assert (nasiya_decl.qty, nasiya_decl.amount) == (3, Decimal(4260))
 
 
-def test_count_mismatch_missing_price_invalid_and_duplicate_imei_are_errors():
+def test_count_mismatch_is_a_warning_missing_price_invalid_and_duplicate_imei_are_errors():
     bad = imei(9)[:-1] + str((int(imei(9)[-1]) + 1) % 10)
     rows = grid(
         ["Nasiya", "17 pro 256", imei(1), imei(2), "1500*3", "16 black 128", imei(3), imei(4), "13 white 128", bad,
@@ -69,8 +69,10 @@ def test_count_mismatch_missing_price_invalid_and_duplicate_imei_are_errors():
     )
     sheet = ns.parse_sheet("B", rows, 2026)
     assert codes(sheet) == ["count_mismatch", "price_missing", "imei_invalid", "imei_duplicate"]
-    assert all(i.level == "error" for i in sheet.issues)
-    assert sheet.issues[0].cell == "A5" and "yozilgan son 3, IMEI esa 2" in sheet.issues[0].message
+    # the IMEIs are counted one by one: a written count that differs is only a warning, not an error
+    assert [i.level for i in sheet.issues] == ["warning", "error", "error", "error"]
+    assert sheet.issues[0].cell == "A5" and "IMEI bo'yicha 2 ta sanaldi (yozilgan son 3)" in sheet.issues[0].message
+    assert sum(i.qty for i in sheet.items if i.model == "17 pro 256") == 2
     # nothing is dropped: the phones without a price are kept with price None
     assert [i.price_usd for i in sheet.items if i.model == "16 black 128"] == [None, None]
 

@@ -124,7 +124,7 @@ async def test_upload_refuses_a_non_nasiya_file(client, operator_h):
 
 async def test_confirmation_needs_every_sheet_linked_and_no_errors(client, operator_h, admin_h):
     ali = await _customer(client, operator_h, "Ali aka")
-    bad = {"Ali aka": [["Nasiya", "17 max 256", int(imei(1)), "1500*2"]]}  # 2 written, 1 IMEI
+    bad = {"Ali aka": [["Nasiya", "17 max 256", int(imei(1)) + 1, "1500*1"]]}  # wrong check digit
     up = await _upload(client, operator_h, workbook("14,10,2026", bad), "n.xlsx")
     r = await client.post(f"/api/nasiya/reports/{up['report_id']}/confirm", json={}, headers=operator_h)
     assert r.status_code == 422 and "bog'lanmagan" in r.json()["detail"]
@@ -298,7 +298,7 @@ async def test_process_confirms_every_day_from_a_date(client, operator_h, admin_
     first_try = {**DAY2, "Vali aka": [["Qoldiq", "15 blue 128", int(imei(6)), 1, "x"]]}
     early = await _upload(client, operator_h, workbook("15,10,2026", first_try), "nazorat_15.10.2026.xlsx")
     d2 = await _upload(client, operator_h, workbook("15,10,2026", DAY2), "nazorat_15.10.2026 (2).xlsx")
-    bad = {**DAY2, "Vali aka": [["Qoldiq", "15 blue 128", int(imei(6)), 1], ["Nasiya", "14 128", int(imei(9)), "900*2"]]}
+    bad = {**DAY2, "Vali aka": [["Qoldiq", "15 blue 128", int(imei(6)), 1], ["Nasiya", "14 128", int(imei(9)) + 1, "900*1"]]}
     d3 = await _upload(client, operator_h, workbook("16,10,2026", bad), "nazorat_16.10.2026.xlsx")
 
     out = await _process(client, operator_h, "2026-10-14")
@@ -332,7 +332,7 @@ async def test_a_group_file_is_counted_on_arrival(session):
 
     session.add_all([Customer(name="Ali aka", kind="dealer"), Customer(name="Vali aka", kind="dealer")])
     files = {"FILE1": workbook("14,10,2026", DAY1), "FILE2": workbook("15,10,2026", DAY2),
-             "FILE3": workbook("16,10,2026", {"Ali aka": [["Nasiya", "17 max 256", int(imei(1)), "1500*2"]]}),
+             "FILE3": workbook("16,10,2026", {"Ali aka": [["Nasiya", "17 max 256", int(imei(1)) + 1, 1500]]}),
              "FILE4": workbook("17,10,2026", {"Yangi odam": [["Nasiya", "17 max 256", int(imei(1)), 1500]]})}
 
     async def download(file_id):
