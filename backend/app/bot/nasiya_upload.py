@@ -95,18 +95,13 @@ async def _reopened_lines(session, report: NasiyaReport) -> list[str]:
     return lines
 
 
-WATCH_DAY = 2  # the panel's split: nasiya given today, exactly 2 days old, older than 2 days
-
-
 def _bands(rows) -> tuple[list, list, list]:
-    """[qty, usd] for: given today, 2 days old, over 2 days (as the panel's Telefonlar tab)."""
+    """[qty, usd] for nasiya 1 day old, 2 days old, 3 days and more (as the panel's Telefonlar tab)."""
     new, two, over = [0, 0], [0, 0], [0, 0]
     for p in rows:
-        band = (new if p.age_days == 1 and p.since_exact else two if p.age_days == WATCH_DAY
-                else over if p.age_days and p.age_days > WATCH_DAY else None)
-        if band is not None:
-            band[0] += p.qty
-            band[1] += (p.price_usd or 0) * p.qty
+        band = new if not p.age_days or p.age_days <= 1 else two if p.age_days == 2 else over
+        band[0] += p.qty
+        band[1] += (p.price_usd or 0) * p.qty
     return new, two, over
 
 
@@ -115,13 +110,14 @@ def _band(mark: str, label: str, band: list) -> str:
 
 
 async def _debt_lines(session, report: NasiyaReport) -> list[str]:
-    """Nasiya by days, in total and for each customer: given today, 2 days, over 2 days."""
+    """Nasiya by days, in total and for each customer: 1 day, 2 days, 3 days and more."""
     data = await nasiya_monitor.phones(session, "debt", on=report.report_date)
     if data.report is None or data.report.id != report.id or not data.rows:
         return []
     new, two, over = _bands(data.rows)
-    lines = ["\n📊 Nasiya kunlar bo'yicha:", _band("🟢", "Yangi berilgan", new),
-             _band("🟡", "2 kun bo'lgan", two), _band("🔴", "2 kundan oshgan", over)]
+    lines = ["\n📊 Nasiya kunlar bo'yicha:", _band("🟢", "1 kun (yangi)", new),
+             _band("🟡", "2 kun", two), _band("🔴", "3 kun va ko'p", over),
+             f"Jami: {new[0] + two[0] + over[0]} ta · {_money(new[1] + two[1] + over[1])}"]
     by_customer: dict[str, list] = {}
     for p in data.rows:
         by_customer.setdefault(p.customer.name if p.customer else p.sheet_name, []).append(p)

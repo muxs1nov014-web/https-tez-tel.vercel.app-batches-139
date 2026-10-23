@@ -52,14 +52,11 @@ type Totals = {
   sotuvQty: number;
   sotuvUsd: number;
   soldBack: number;
-  /** Nasiya given on this day / exactly 2 days old / more than 2 days old: [qty, usd]. */
+  /** Nasiya 1 day old (new) / 2 days old / 3 days and more: [qty, usd]. */
   newToday: [number, number];
   twoDays: [number, number];
   overTwo: [number, number];
 };
-
-/** The day the business watches: phones exactly 2 days in nasiya, and those past it. */
-const WATCH_DAY = 2;
 
 /** Phones with the same state, model, days, price and term: one line with their IMEIs. */
 type Line = { key: string; first: NasiyaPhoneRow; qty: number; imeis: string[] };
@@ -74,8 +71,8 @@ type CustomerGroup = Totals & {
 
 const isDebt = (r: NasiyaPhoneRow) => r.kind === 'nasiya' || r.kind === 'variant';
 
-/** `day`: the counted file's day; nasiya that started on it was given that day. */
-function addTo(t: Totals, r: NasiyaPhoneRow, day: string | null) {
+/** Nasiya by its days, as the badge shows them: 1 day green, 2 days yellow, 3 and more red. */
+function addTo(t: Totals, r: NasiyaPhoneRow) {
   const amount = toNum(r.price_usd) * r.qty;
   if (r.kind === 'qoldiq') t.qoldiqQty += r.qty;
   else if (r.kind === 'sotuv') {
@@ -84,19 +81,9 @@ function addTo(t: Totals, r: NasiyaPhoneRow, day: string | null) {
   } else {
     t.debtQty += r.qty;
     t.debtUsd += amount;
-    // started in nasiya at this customer on the file's day = given that day (new, or sold on credit from qoldiq)
-    const bucket =
-      r.since !== null && r.since === day && r.since_exact
-        ? t.newToday
-        : r.age_days === WATCH_DAY
-          ? t.twoDays
-          : r.age_days !== null && r.age_days > WATCH_DAY
-            ? t.overTwo
-            : null;
-    if (bucket) {
-      bucket[0] += r.qty;
-      bucket[1] += amount;
-    }
+    const bucket = r.age_days === null || r.age_days <= 1 ? t.newToday : r.age_days === 2 ? t.twoDays : t.overTwo;
+    bucket[0] += r.qty;
+    bucket[1] += amount;
   }
   if (r.sold_on) t.soldBack += r.qty;
 }
@@ -115,13 +102,13 @@ const emptyTotals = (): Totals => ({
 
 const money = (usd: number) => fmtUsd(usd, { symbol: true, decimals: 0 });
 
-/** The whole list: nasiya given on this day, exactly 2 days old, and older than 2 days. */
+/** The whole list: nasiya 1 day old, 2 days old, 3 days and more — each with its count and sum. */
 function DebtSummary({ t }: { t: Totals }) {
   if (t.debtQty === 0) return null;
   const tiles = [
-    { label: 'Yangi berilgan nasiya', v: t.newToday, tone: 'text-success-700', bar: 'bg-success-500' },
-    { label: `${WATCH_DAY} kun bo'lgan nasiya`, v: t.twoDays, tone: 'text-slate-900', bar: 'bg-yellow-300' },
-    { label: `${WATCH_DAY} kundan oshgan nasiya`, v: t.overTwo, tone: 'text-danger-700', bar: 'bg-danger-600' },
+    { label: '1 kun — yangi berilgan', v: t.newToday, tone: 'text-success-700', bar: 'bg-success-500' },
+    { label: '2 kun', v: t.twoDays, tone: 'text-yellow-700', bar: 'bg-yellow-300' },
+    { label: "3 kun va undan ko'p", v: t.overTwo, tone: 'text-danger-700', bar: 'bg-danger-600' },
   ];
   return (
     <div className="grid grid-cols-1 gap-2 px-4 pb-3 sm:grid-cols-3 sm:px-5">
@@ -137,24 +124,24 @@ function DebtSummary({ t }: { t: Totals }) {
   );
 }
 
-/** Under a customer's name: its nasiya given on this day, exactly 2 days old and older than 2 days. */
+/** Under a customer's name: its nasiya 1 day, 2 days, 3 days and more — count and sum of each. */
 function DebtSplit({ t }: { t: Totals }) {
   if (t.newToday[0] === 0 && t.twoDays[0] === 0 && t.overTwo[0] === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 pb-2.5 pl-10 text-[12px] sm:px-5 sm:pl-11">
       {t.newToday[0] > 0 && (
-        <span className="rounded-full bg-success-50 px-2 py-0.5 font-medium text-success-700">
-          Yangi berilgan: {fmtQty(t.newToday[0])} dona · {money(t.newToday[1])}
+        <span className={`rounded-full px-2 py-0.5 font-medium ${debtAgeClass(1)}`}>
+          1 kun (yangi): {fmtQty(t.newToday[0])} dona · {money(t.newToday[1])}
         </span>
       )}
       {t.twoDays[0] > 0 && (
-        <span className={`rounded-full px-2 py-0.5 font-medium ${debtAgeClass(0)}`}>
-          {WATCH_DAY} kun bo'lgan: {fmtQty(t.twoDays[0])} dona · {money(t.twoDays[1])}
+        <span className={`rounded-full px-2 py-0.5 font-medium ${debtAgeClass(2)}`}>
+          2 kun: {fmtQty(t.twoDays[0])} dona · {money(t.twoDays[1])}
         </span>
       )}
       {t.overTwo[0] > 0 && (
-        <span className={`rounded-full px-2 py-0.5 font-semibold ${debtAgeClass(5)}`}>
-          {WATCH_DAY} kundan oshgan: {fmtQty(t.overTwo[0])} dona · {money(t.overTwo[1])}
+        <span className={`rounded-full px-2 py-0.5 font-semibold ${debtAgeClass(3)}`}>
+          3 kun va ko'p: {fmtQty(t.overTwo[0])} dona · {money(t.overTwo[1])}
         </span>
       )}
     </div>
@@ -201,8 +188,8 @@ function PhonesTable({
         g = { ...emptyTotals(), key, name: r.customer?.name ?? r.sheet_name, customerId: r.customer?.id ?? null, lines: [], oldestDebt: null };
         byKey.set(key, g);
       }
-      addTo(g, r, day);
-      addTo(all, r, day);
+      addTo(g, r);
+      addTo(all, r);
       if (isDebt(r) && r.age_days !== null && (g.oldestDebt === null || r.age_days > (g.oldestDebt.age_days ?? -1))) g.oldestDebt = r;
       const lineKey = [key, r.kind, r.model, r.age_days, r.since_exact, r.overdue, r.price_usd, r.term_days, r.sold_on].join('|');
       let line = lines.get(lineKey);
@@ -215,7 +202,7 @@ function PhonesTable({
       if (r.imei) line.imeis.push(r.imei);
     }
     return { groups: [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name)), totals: all };
-  }, [filtered, day]);
+  }, [filtered]);
 
   // a chosen customer or a search shows the phones at once; otherwise each customer is one line until opened
   const focused = customer !== '' || search.trim() !== '';

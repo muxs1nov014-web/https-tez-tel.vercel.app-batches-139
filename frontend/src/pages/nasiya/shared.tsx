@@ -87,12 +87,12 @@ export function IssueLevel({ issue }: { issue: NasiyaIssue }) {
 
 /** Colour of a phone's days in nasiya: yellow up to 2 days, light red up to 5, dark red from 5. */
 export function debtAgeClass(days: number): string {
-  if (days >= 5) return 'bg-danger-700 text-white';
-  if (days > 2) return 'bg-danger-200 text-danger-800';
-  return 'bg-yellow-300 text-yellow-950';
+  if (days >= 3) return 'bg-danger-600 text-white';
+  if (days === 2) return 'bg-yellow-300 text-yellow-950';
+  return 'bg-success-100 text-success-800';
 }
 
-/** Days in the current state. Nasiya (and variant) by the 2/5-day scale; qoldiq amber from a week, red past a month. */
+/** Days in the current state. Nasiya (and variant): 1 day green, 2 days yellow, 3 and more red; qoldiq amber from a week, red past a month. */
 export function AgeBadge({
   days,
   exact,
