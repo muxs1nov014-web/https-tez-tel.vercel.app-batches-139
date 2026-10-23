@@ -305,9 +305,10 @@ def _ages(as_of: date, since: dict[str, Since]) -> dict[str, int]:
 
 
 def _as_of(report: NasiyaReport, on: date | None) -> date:
-    """Ages of the latest day run to today: a phone in nasiya since 13.10 is 11 days old on 23.10 even when the last
-    file counted is from 21.10 (it was still in nasiya then). An explicit past day keeps that day."""
-    return max(report.report_date, reports.today()) if on is None else report.report_date
+    """Ages of the latest day run to yesterday, the last day a file can be in for: a phone given on 22.10 is 1 day old
+    on 23.10 until the 23.10 file comes (client request); with no files for days they keep growing (in since 13.10 →
+    10 days on 23.10 when the last file is from 21.10). An explicit past day keeps that day."""
+    return max(report.report_date, reports.today() - timedelta(days=1)) if on is None else report.report_date
 
 
 @dataclass

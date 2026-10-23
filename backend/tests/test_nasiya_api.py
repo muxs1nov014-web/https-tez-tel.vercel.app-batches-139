@@ -460,11 +460,15 @@ async def test_ages_of_the_latest_day_run_to_today(client, operator_h, viewer_h,
     from app.services import reports
     customers, d1, d2 = await _setup_two_days(client, operator_h)
     await _confirm(client, operator_h, d2["id"])
-    monkeypatch.setattr(reports, "today", lambda: date(2026, 10, 18))  # the last file counted is 15.10
+    monkeypatch.setattr(reports, "today", lambda: date(2026, 10, 16))  # the 15.10 file is the last one: given then = 1 day
     data = (await client.get("/api/nasiya/phones?group=debt", headers=viewer_h)).json()
-    assert data["ages_as_of"] == "2026-10-18"
+    assert data["ages_as_of"] == "2026-10-15"
+    assert {p["imei"]: p["age_days"] for p in data["rows"]}[imei(8)] == 1
+    monkeypatch.setattr(reports, "today", lambda: date(2026, 10, 18))  # no file for 16, 17.10: ages run to 17.10
+    data = (await client.get("/api/nasiya/phones?group=debt", headers=viewer_h)).json()
+    assert data["ages_as_of"] == "2026-10-17"
     by_imei = {p["imei"]: p["age_days"] for p in data["rows"]}
-    assert (by_imei[imei(3)], by_imei[imei(8)]) == (5, 4)  # in since 14.10 → 5 days on 18.10; 15.10 → 4 days
+    assert (by_imei[imei(3)], by_imei[imei(8)]) == (4, 3)  # in since 14.10 → 4 days on 17.10; 15.10 → 3 days
     past = (await client.get("/api/nasiya/phones?group=debt&on=2026-10-15", headers=viewer_h)).json()
     assert past["ages_as_of"] == "2026-10-15" and {p["imei"]: p["age_days"] for p in past["rows"]}[imei(3)] == 2
 
@@ -478,7 +482,7 @@ async def test_customer_page_and_overview_work_days_after_the_last_file(client, 
         r = await client.get(f"/api/nasiya/customers/{cid}", headers=viewer_h)
         assert r.status_code == 200, r.text
     ali = (await client.get(f"/api/nasiya/customers/{customers['Ali aka']}", headers=viewer_h)).json()
-    assert {i["imei"]: i["age_days"] for i in ali["items"]}[imei(3)] == 9  # 14.10 → 22.10
+    assert {i["imei"]: i["age_days"] for i in ali["items"]}[imei(3)] == 8  # 14.10 → 21.10
     # a third customer whose sheet has no event that day (its phones did not change): every customer page still opens
     sami = await _customer(client, operator_h, "Sami aka")
     customers["Sami aka"] = sami["id"]

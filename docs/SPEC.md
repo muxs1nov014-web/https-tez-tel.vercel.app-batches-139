@@ -614,8 +614,9 @@ panel and then monitored day to day.
   show the day the phone came into this state, that day counts, as BonviAI's day buckets do). A run that reaches the
   first confirmed day is a lower bound
   (`since_exact = false`, shown as "≥"). Age in days counts the first day as day 1 (in since 13.10 → 3 days on
-  15.10), up to today for the latest day
-  (`ages_as_of`: a phone in nasiya since 13.10 is 11 days old on 23.10 even when the last file counted is 21.10) and up
+  15.10), up to yesterday or the latest file's day, whichever is later, for the latest day
+  (`ages_as_of`: a phone given on 22.10 is 1 day old on 23.10 until the 23.10 file comes; one in nasiya since 13.10
+  is 10 days old on 23.10 when the last file counted is 21.10) and up
   to that day for an explicit past day (`on=`). Buckets 1–3, 4–7, 8–14, 15–30, 30+ days; overdue = age > `term_days`. Panel colours for nasiya days:
   yellow up to 2, light red 3–4, dark red from 5 (the bot marks them 🟡 🟠 🔴); qoldiq keeps amber > 7, red > 30.
 - Per customer: debt (nasiya + variant), qoldiq (count; value from the sheet's panel), paid today, new debt, limit and
