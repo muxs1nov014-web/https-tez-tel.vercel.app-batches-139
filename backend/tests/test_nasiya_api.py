@@ -494,3 +494,26 @@ async def test_customer_page_and_overview_work_days_after_the_last_file(client, 
     for url in ("/api/nasiya/overview", f"/api/nasiya/months?customer_id={customers['Ali aka']}", "/api/nasiya/phones"):
         r = await client.get(url, headers=viewer_h)
         assert r.status_code == 200, r.text
+
+
+async def test_a_date_marker_reaches_only_before_the_history(client, operator_h, viewer_h):
+    """Adxam aka B 4, 22.10: phones kept in qoldiq on 18.10 under an '18,10,' marker became nasiya on 19.10, so they
+    are 4 days old, not 5. A marker still dates a phone that was already in nasiya when the history starts."""
+    ali = await _customer(client, operator_h, "Ali aka")
+    vali = await _customer(client, operator_h, "Vali aka")
+    customers = {"Ali aka": ali["id"], "Vali aka": vali["id"]}
+    up1 = await _upload(client, operator_h, workbook("14,10,2026", DAY1), "nazorat_14.10.2026.xlsx")
+    await _confirm(client, operator_h, (await _link_all(client, operator_h, await _detail(
+        client, operator_h, up1["report_id"]), customers))["id"])
+    day2 = {"Ali aka": [
+        ["Nasiya", "13,10,", "13 black 128", int(imei(3)), 460],  # in nasiya on the first day: 13.10 counts
+        ["Nasiya", "14,10,", "16 black 128", int(imei(4)), 790],  # in qoldiq on 14.10: nasiya from 15.10
+        ["Qoldiq", "16 black 128", int(imei(5)), 1],
+    ], "Vali aka": DAY1["Vali aka"]}
+    up2 = await _upload(client, operator_h, workbook("15,10,2026", day2), "nazorat_15.10.2026.xlsx")
+    await _confirm(client, operator_h, (await _link_all(client, operator_h, await _detail(
+        client, operator_h, up2["report_id"]), customers))["id"])
+    rows = (await client.get("/api/nasiya/phones?group=debt", headers=viewer_h)).json()["rows"]
+    by_imei = {p["imei"]: (p["since"], p["age_days"], p["since_exact"]) for p in rows}
+    assert by_imei[imei(3)] == ("2026-10-13", 3, True)
+    assert by_imei[imei(4)] == ("2026-10-15", 1, True)

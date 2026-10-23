@@ -609,7 +609,9 @@ panel and then monitored day to day.
   debt_to_qoldiq, moved (another customer), price_changed, reopened (sotuv → anything). The panel says how many days
   lie between the two days compared.
 - Age: the first confirmed day of the phone's current unbroken run at the same customer in the same state (or its
-  `marked_date`, when earlier and not in the future). A run that reaches the first confirmed day is a lower bound
+  `marked_date`, when earlier and not in the future, only for a run that reaches the first confirmed day: when the files
+  show the day the phone came into this state, that day counts, as BonviAI's day buckets do). A run that reaches the
+  first confirmed day is a lower bound
   (`since_exact = false`, shown as "≥"). Age in days counts the first day as day 1 (in since 13.10 → 3 days on
   15.10), up to today for the latest day
   (`ages_as_of`: a phone in nasiya since 13.10 is 11 days old on 23.10 even when the last file counted is 21.10) and up

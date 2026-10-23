@@ -255,7 +255,10 @@ async def _since(session: AsyncSession, report: NasiyaReport, rows: list[Row]) -
             else:
                 exact = True
                 break
-        if r.marked_date and r.marked_date <= report.report_date and r.marked_date < start:
+        # The sheet's date marker (`18,10,`) only reaches back before the history: when the files show the day the
+        # phone came into this state, that day counts (a phone kept in qoldiq on 18.10 under an '18,10,' marker
+        # became nasiya on 19.10).
+        if not exact and r.marked_date and r.marked_date <= report.report_date and r.marked_date < start:
             start, exact = r.marked_date, True
         out[r.imei] = Since(start, exact)
     return out
