@@ -117,6 +117,10 @@ async def purchases_by_product(session: AsyncSession, date_from: date | None, da
 
 
 async def dashboard(session: AsyncSession) -> DashboardOut:
+    """Sales = panel sales plus the Sotuv of the daily nasiya files (each phone once, as on the nasiya card). The
+    nasiya files carry no purchase cost, so profit stays from panel sales only."""
+    from app.services import nasiya_monitor  # nasiya_monitor imports this module
+
     stock = await stock_rows(session)
     now = today()
     month_start = now.replace(day=1)
@@ -136,22 +140,27 @@ async def dashboard(session: AsyncSession) -> DashboardOut:
         .group_by(month_key(Batch.batch_date))
     )).all()))
     sales = {r.key: r for r in await profit(session, start, None, group_by="month")}
+    nasiya = {m.month.strftime("%Y-%m"): m for m in await nasiya_monitor.months(session)}
+    this_month = nasiya.get(month_start.strftime("%Y-%m"))
+    n_qty, n_usd = (this_month.sotuv_qty, this_month.sotuv_usd) if this_month else (0, ZERO)
     months, y, m = [], start.year, start.month
     for _ in range(12):
         key = f"{y:04d}-{m:02d}"
         p_qty, p_usd = purchases.get(key, (0, ZERO))
         s = sales.get(key)
+        n = nasiya.get(key)
+        nq, nu = (n.sotuv_qty, n.sotuv_usd) if n else (0, ZERO)
         months.append(MonthlyRow(month=key, purchases_qty=p_qty, purchases_usd=p_usd,
-                                 sales_qty=s.qty if s else 0, revenue=s.revenue if s else ZERO,
-                                 profit=s.profit if s else ZERO))
+                                 sales_qty=(s.qty if s else 0) + nq, revenue=(s.revenue if s else ZERO) + nu,
+                                 profit=s.profit if s else ZERO, nasiya_sales_qty=nq, nasiya_revenue=nu))
         m += 1
         if m == 13:
             y, m = y + 1, 1
     return DashboardOut(
         stock_qty=sum(r.qty for r in stock),
         stock_value=sum((r.stock_value for r in stock), ZERO),
-        month=MonthStats(sales_qty=sales_qty, revenue=revenue, profit=revenue - cost,
-                         purchases_qty=int(month_purchases[0]), purchases_usd=month_purchases[1]),
+        month=MonthStats(sales_qty=sales_qty + n_qty, revenue=revenue + n_usd, profit=revenue - cost,
+                         nasiya_sales_qty=n_qty, nasiya_revenue=n_usd, purchases_qty=int(month_purchases[0]), purchases_usd=month_purchases[1]),
         monthly=months,
     )
 

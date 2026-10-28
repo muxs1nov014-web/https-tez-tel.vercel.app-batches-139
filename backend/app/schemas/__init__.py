@@ -643,6 +643,8 @@ class MonthStats(BaseModel):
     sales_qty: int
     revenue: Num
     profit: Num
+    nasiya_sales_qty: int = 0  # part of sales_qty / revenue taken from the nasiya files' Sotuv (no cost, no profit)
+    nasiya_revenue: Num = Decimal(0)
     purchases_qty: int
     purchases_usd: Num
 
@@ -654,6 +656,8 @@ class MonthlyRow(BaseModel):
     sales_qty: int
     revenue: Num
     profit: Num
+    nasiya_sales_qty: int = 0
+    nasiya_revenue: Num = Decimal(0)
 
 
 class DashboardOut(BaseModel):

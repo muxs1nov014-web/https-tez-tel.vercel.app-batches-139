@@ -5,6 +5,9 @@ export interface DashboardMonthTotals {
   sales_qty: number;
   revenue: Num;
   profit: Num;
+  /** Part of sales_qty / revenue from the nasiya files' Sotuv: no purchase cost, so not in profit. */
+  nasiya_sales_qty: number;
+  nasiya_revenue: Num;
   purchases_qty: number;
   purchases_usd: Num;
 }
@@ -17,6 +20,8 @@ export interface DashboardMonthly {
   sales_qty: number;
   revenue: Num;
   profit: Num;
+  nasiya_sales_qty: number;
+  nasiya_revenue: Num;
 }
 
 export interface Dashboard {

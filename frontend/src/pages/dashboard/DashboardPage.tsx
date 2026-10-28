@@ -240,6 +240,7 @@ export function DashboardPage() {
         {(data) => {
           const rows = toChartRows(data);
           const hasActivity = rows.some((r) => r.purchases_qty > 0 || r.sales_qty > 0);
+          const nasiyaQty = toNum(data.month.nasiya_sales_qty);
           return (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -247,14 +248,27 @@ export function DashboardPage() {
                 <StatCard icon={BanknotesIcon} tint="green" label="Ombor qiymati" value={fmtUsd(data.stock_value, { symbol: true })} />
               </div>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-                <StatCard icon={CartIcon} tint="pink" label="Shu oy sotuv" value={`${fmtQty(data.month.sales_qty)} dona`} />
-                <StatCard icon={ChartIcon} tint="blue" label="Shu oy tushum" value={fmtUsd(data.month.revenue, { symbol: true })} />
+                <StatCard
+                  icon={CartIcon}
+                  tint="pink"
+                  label="Shu oy sotuv"
+                  value={`${fmtQty(data.month.sales_qty)} dona`}
+                  sub={nasiyaQty > 0 ? `${fmtQty(nasiyaQty)} dona nasiya fayllaridan` : undefined}
+                />
+                <StatCard
+                  icon={ChartIcon}
+                  tint="blue"
+                  label="Shu oy tushum"
+                  value={fmtUsd(data.month.revenue, { symbol: true })}
+                  sub={nasiyaQty > 0 ? `${fmtUsd(data.month.nasiya_revenue, { symbol: true })} nasiya sotuvi` : undefined}
+                />
                 <StatCard
                   icon={TrendUpIcon}
                   tint="mint"
                   label="Shu oy foyda"
                   value={fmtUsd(data.month.profit, { symbol: true })}
                   valueClassName={signClass(data.month.profit)}
+                  sub={nasiyaQty > 0 ? "Nasiya sotuvi tannarxsiz — foydaga kirmagan" : undefined}
                 />
                 <StatCard icon={ArchiveIcon} tint="orange" label="Shu oy xarid" value={`${fmtQty(data.month.purchases_qty)} dona`} />
                 {/* Odd card out on iPhone: a "medium" widget across both columns. */}
