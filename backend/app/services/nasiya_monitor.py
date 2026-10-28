@@ -530,7 +530,9 @@ def _month_start(d: date) -> date:
 async def months(session: AsyncSession, count: int = 12, customer_id: int | None = None) -> list[NasiyaMonthRow]:
     """Month by month from the confirmed days (newest month first).
 
-    Sotuv: phones in the Sotuv column, each IMEI once on its first day there (it can stay listed a few days).
+    Sotuv: a phone in the Sotuv column is one sale on its first day there. It can stay listed a few days (the group bot
+    counts it again each day; this does not): it is a new sale only if, since its last Sotuv, it was back in debt or
+    qoldiq or listed at another customer (sold, returned, sold again).
     New debt: phones that are debt (nasiya / variant) on a day and were not the day before; the first confirmed day
     has no day before, so its month is marked partial. Month end: debt and qoldiq on the month's last confirmed
     day. For one customer, a phone moved in from another customer counts as new debt for this one."""
@@ -558,13 +560,14 @@ async def months(session: AsyncSession, count: int = 12, customer_id: int | None
 
     out: dict[date, dict] = {}
     prev: dict[str, tuple] | None = None  # imei → (customer, group) on the previous confirmed day
+    last: dict[str, tuple] = {}  # imei → (customer, group) on the last confirmed day it was listed at all
     for rid, day in reports:
         rows = by_report.get(rid, [])
         state = {imei: (cid, group_of(kind)) for cid, kind, imei, _, _ in rows if imei}
         if day >= first_month:
             m = out.setdefault(_month_start(day), {
                 "days": 0, "first": day, "last": day, "partial": prev is None, "sotuv_qty": 0, "sotuv": ZERO,
-                "new_qty": 0, "new": ZERO, "debt_qty": 0, "debt": ZERO, "qoldiq_qty": 0, "seen": set()})
+                "new_qty": 0, "new": ZERO, "debt_qty": 0, "debt": ZERO, "qoldiq_qty": 0})
             m["days"] += 1
             m["last"] = day
             m["debt_qty"] = m["debt"] = m["qoldiq_qty"] = 0
@@ -581,12 +584,11 @@ async def months(session: AsyncSession, count: int = 12, customer_id: int | None
                     m["qoldiq_qty"] += qty
                 elif group == "sotuv":
                     # a phone without an IMEI cannot be followed across days: counted on every day it is listed
-                    if imei is None or (imei not in m["seen"] and (before is None or before[1] != "sotuv")):
+                    if imei is None or last.get(imei) != (cid, "sotuv"):
                         m["sotuv_qty"] += qty
                         m["sotuv"] += price * qty
-                    if imei:
-                        m["seen"].add(imei)
         prev = state
+        last.update(state)
     return [NasiyaMonthRow(
         month=month, days=m["days"], first_date=m["first"], last_date=m["last"], partial=m["partial"],
         sotuv_qty=m["sotuv_qty"], sotuv_usd=m["sotuv"], new_debt_qty=m["new_qty"], new_debt_usd=m["new"],

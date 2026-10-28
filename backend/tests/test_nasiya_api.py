@@ -456,6 +456,24 @@ async def test_a_sold_phone_that_comes_back_is_an_alert_even_after_a_gap(client,
     assert {p["imei"]: p["sold_on"] for p in rows if p["sold_on"]} == {imei(1): "2026-10-15"}
 
 
+async def test_monthly_sotuv_counts_a_sale_once_and_a_resale_again(client, operator_h, viewer_h):
+    customers, d1, d2 = await _setup_two_days(client, operator_h)
+    await _confirm(client, operator_h, d2["id"])  # 15.10: imei 1 sold for 1500
+    days = {
+        "16,10,2026": DAY2,  # imei 1 still listed in Sotuv: the same sale, not a second one
+        "17,10,2026": {"Ali aka": DAY2["Ali aka"][1:], "Vali aka": [
+            ["Qoldiq", "15 blue 128", int(imei(6)), 1, "17 max 256", int(imei(1)), 1]]},  # back at Vali
+        "18,10,2026": {"Ali aka": DAY2["Ali aka"][1:], "Vali aka": [
+            ["Sotuv", "17 max 256", int(imei(1)), 1450], ["Qoldiq", "15 blue 128", int(imei(6)), 1]]},  # sold again
+    }
+    for day, sheets in days.items():
+        up = await _upload(client, operator_h, workbook(day, sheets), f"nazorat_{day.replace(',', '.')}.xlsx")
+        await _confirm(client, operator_h, (await _link_all(client, operator_h, await _detail(
+            client, operator_h, up["report_id"]), customers))["id"])
+    [m] = (await client.get("/api/nasiya/months", headers=viewer_h)).json()
+    assert (m["sotuv_qty"], m["sotuv_usd"]) == (2, 2950)
+
+
 async def test_ages_of_the_latest_day_run_to_today(client, operator_h, viewer_h, monkeypatch):
     from app.services import reports
     customers, d1, d2 = await _setup_two_days(client, operator_h)
